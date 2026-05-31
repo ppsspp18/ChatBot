@@ -21,5 +21,23 @@ class LLMRouter:
             model=model,
             messages=messages
         )
+    
+    async def generate_stream(
+        self,
+        provider,
+        model,
+        messages
+    ):
+
+        provider_instance = self.providers.get(provider)
+
+        if not provider_instance:
+            raise ValueError("Invalid provider")
+
+        async for chunk in provider_instance.generate_stream(
+            model=model,
+            messages=messages
+        ):
+            yield chunk
 
 router = LLMRouter()

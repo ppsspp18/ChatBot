@@ -11,6 +11,7 @@ from app.services.conversations_service import (
     get_conversation,
     delete_conversation,
     send_message,
+    send_message_stream,
     get_messages
 )
 
@@ -22,7 +23,7 @@ async def create_chat_route(data: CreateChatRequest):
     return await create_conversation(data)
 
 @router.post("/conversations/edit")
-async def create_chat_route(data: UpdateChatRequest):
+async def edit_chat_route(data: UpdateChatRequest):
     return await edit_conversation(data)
 
 @router.get("/conversations/all")
@@ -45,6 +46,12 @@ async def send_message_route(
     data: MessageRequest
 ):
     return await send_message(data)
+
+@router.post("/messages/send/stream")
+async def send_message_route_stream(
+    data: MessageRequest
+):
+    return await send_message_stream(data)
 
 
 @router.get("/messages/all")
