@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pymongo
+motor
+python-dotenv
+pydantic
+langchain
+langchain-community
+groq
+google-generativeai
+
