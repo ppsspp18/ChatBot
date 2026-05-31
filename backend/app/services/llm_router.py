@@ -10,7 +10,7 @@ class LLMRouter:
             "google": GoogleProvider()
         }
 
-    async def generate(self, provider, model, prompt):
+    async def generate(self, provider, model, messages):
 
         provider_instance = self.providers.get(provider)
 
@@ -19,7 +19,7 @@ class LLMRouter:
 
         return await provider_instance.generate(
             model=model,
-            prompt=prompt
+            messages=messages
         )
 
 router = LLMRouter()

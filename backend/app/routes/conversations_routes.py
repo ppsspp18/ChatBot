@@ -1,11 +1,12 @@
 from fastapi import APIRouter
 from uuid import UUID
 
-from app.schemas.conversations_schema import CreateChatRequest
+from app.schemas.conversations_schema import CreateChatRequest, UpdateChatRequest
 from app.schemas.messages_schema import MessageRequest
 
 from app.services.conversations_service import (
     create_conversation,
+    edit_conversation,
     get_all_conversations,
     get_conversation,
     delete_conversation,
@@ -20,6 +21,9 @@ router = APIRouter()
 async def create_chat_route(data: CreateChatRequest):
     return await create_conversation(data)
 
+@router.post("/conversations/edit")
+async def create_chat_route(data: UpdateChatRequest):
+    return await edit_conversation(data)
 
 @router.get("/conversations/all")
 async def get_chats_route():

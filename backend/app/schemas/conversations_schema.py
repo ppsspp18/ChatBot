@@ -9,6 +9,10 @@ class CreateChatRequest(BaseModel):
     provider: str
     model: str
 
+class UpdateChatRequest(BaseModel):
+    session_id: str
+    title: str
+
 
 class ConversationSchema(BaseModel):
     session_id: str

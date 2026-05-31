@@ -31,6 +31,26 @@ async def create_conversation(data):
 
     return conversation
 
+async def edit_conversation(data):
+    result = await conversations_collection.update_one(
+        {"session_id": data.session_id},
+        {    
+            "$set": {
+                "title": data.title,
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
+
+    return {
+        "message": "Conversation updated successfully"
+    }
 
 async def get_all_conversations():
     conversations = []
@@ -88,6 +108,30 @@ async def send_message(data):
             status_code=404,
             detail="Conversation not found"
         )
+    
+    recent_messages = (
+        await messages_collection
+        .find({"session_id": data.session_id})
+        .sort("sequence", -1)
+        .limit(4)
+        .to_list(length=4)
+    )
+
+    recent_messages.reverse()
+
+    context_messages = []
+
+    for msg in recent_messages:
+        context_messages.append({
+            "role": msg["role"],
+            "content": msg["content"]
+        })
+
+    context_messages.append({
+        "role": "user",
+        "content": data.message
+    })
+
 
     start = time.time()
 
@@ -95,7 +139,7 @@ async def send_message(data):
     response = await router.generate(
         provider=data.provider,
         model=data.model,
-        prompt=data.message
+        messages=context_messages
     )
 
     end = time.time()
