@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-from uuid import UUID
 
 from app.schemas.conversations_schema import CreateConversationRequest, UpdateChatRequest
 from app.schemas.messages_schema import MessageRequest
@@ -40,13 +39,13 @@ async def get_chats_route():
 
 
 @router.get("/conversations/get")
-async def get_conversation_route(session_id: UUID):
+async def get_conversation_route(session_id: str):
     """Get a single conversation by session_id."""
     return await get_conversation(session_id)
 
 
 @router.patch("/conversations/cancel")
-async def cancel_conversation_route(session_id: UUID):
+async def cancel_conversation_route(session_id: str):
     """
     Soft-cancel a conversation (sets status=cancelled).
     Messages are preserved so the conversation can be resumed.
@@ -55,7 +54,7 @@ async def cancel_conversation_route(session_id: UUID):
 
 
 @router.delete("/conversations/delete")
-async def delete_conversation_route(session_id: UUID):
+async def delete_conversation_route(session_id: str):
     """Hard-delete a conversation and all its messages."""
     return await delete_conversation(session_id)
 
@@ -75,6 +74,6 @@ async def send_message_stream_route(data: MessageRequest):
 
 
 @router.get("/messages/all")
-async def get_messages_route(session_id: UUID):
+async def get_messages_route(session_id: str):
     """Fetch all messages in a conversation ordered by sequence."""
     return await get_messages(session_id)

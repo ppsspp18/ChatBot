@@ -1,11 +1,10 @@
 from pydantic import BaseModel
 from typing import Literal, List
-from uuid import UUID
 
 
 class InferenceLogSchema(BaseModel):
     session_id: str
-    log_id: UUID
+    log_id: str
 
     provider: str
     model: str

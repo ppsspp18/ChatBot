@@ -68,9 +68,9 @@ async def get_all_conversations():
     return conversations
 
 
-async def get_conversation(session_id: UUID):
+async def get_conversation(session_id: str):
     conversation = await conversations_collection.find_one(
-        {"session_id": str(session_id)}
+        {"session_id": session_id}
     )
 
     if not conversation:
@@ -84,13 +84,13 @@ async def get_conversation(session_id: UUID):
     return conversation
 
 
-async def cancel_conversation(session_id: UUID):
+async def cancel_conversation(session_id: str):
     """
     Soft-cancel: sets status to 'cancelled', keeps all messages intact.
     The frontend can still resume the conversation (history preserved).
     """
     result = await conversations_collection.update_one(
-        {"session_id": str(session_id)},
+        {"session_id": session_id},
         {
             "$set": {
                 "status": "cancelled",
@@ -111,9 +111,9 @@ async def cancel_conversation(session_id: UUID):
     }
 
 
-async def delete_conversation(session_id: UUID):
+async def delete_conversation(session_id: str):
     result = await conversations_collection.delete_one(
-        {"session_id": str(session_id)}
+        {"session_id": session_id}
     )
 
     if result.deleted_count == 0:
@@ -398,11 +398,11 @@ async def send_message_stream(data):
     )
 
 
-async def get_messages(session_id: UUID):
+async def get_messages(session_id: str):
     messages = []
 
     async for message in messages_collection.find(
-        {"session_id": str(session_id)}
+        {"session_id": session_id}
     ).sort("sequence", 1):
 
         message["_id"] = str(message["_id"])

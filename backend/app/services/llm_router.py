@@ -1,5 +1,6 @@
 from app.services.groq_provider import GroqProvider
 from app.services.google_provider import GoogleProvider
+from app.services.deepseek_provider import DeepSeekProvider
 
 class LLMRouter:
 
@@ -7,7 +8,8 @@ class LLMRouter:
 
         self.providers = {
             "groq": GroqProvider(),
-            "google": GoogleProvider()
+            "google": GoogleProvider(),
+            "deepseek": DeepSeekProvider()
         }
 
     async def generate(self, provider, model, messages):
