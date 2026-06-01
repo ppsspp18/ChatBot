@@ -1,196 +1,116 @@
 import streamlit as st
 
 from api_client import (
-    create_chat,
-    get_chats,
-    delete_chat,
-    send_message,
-    get_messages
+    _delete,
+    _post,
+    load_conversations,
+    select_conversation,
 )
+from config import PROVIDER_BADGE, SESSION_DEFAULTS, STATUS_ICON
+from views import render_chat, render_metrics, render_system
+
+# ── 1. Page config ─────────────────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="AI Chat System",
-    layout="wide"
+    page_title="LLM Chat",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-# ----------------------------
-# SESSION STATE
-# ----------------------------
+# ── 2. Global CSS ──────────────────────────────────────────────────────────────
 
-if "selected_chat" not in st.session_state:
-    st.session_state.selected_chat = None
-
-# ----------------------------
-# PAGE TITLE
-# ----------------------------
-
-st.title("🚀 AI Chat System")
-
-# ----------------------------
-# PROVIDER SELECTION
-# ----------------------------
-
-provider = st.sidebar.selectbox(
-    "Select Provider",
-    [
-        "groq",
-        "google"
-    ]
+st.markdown(
+    """
+    <style>
+    /* Tighten sidebar button spacing */
+    [data-testid="stSidebar"] .stButton > button {
+        text-align: left;
+        font-size: 0.85rem;
+    }
+    /* Make chat messages slightly wider */
+    [data-testid="stChatMessage"] {
+        max-width: 100% !important;
+    }
+    /* Metric card value size */
+    [data-testid="stMetricValue"] { font-size: 1.4rem !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-# ----------------------------
-# MODEL SELECTION
-# ----------------------------
+# ── 3. Session-state initialisation ───────────────────────────────────────────
 
-GROQ_MODELS = [
-    "llama-3.3-70b-versatile",
-    "openai/gpt-oss-20b",
-    "openai/gpt-oss-120b",
-    "qwen/qwen3-32b"
-]
+for _key, _default in SESSION_DEFAULTS.items():
+    if _key not in st.session_state:
+        st.session_state[_key] = _default
 
-GOOGLE_MODELS = [
-    "gemma-4-31b-it",
-    "gemini-3.1-flash-lite"
-]
-# deep seek = deepseek-v4-flash
+# ── 4. Load data on every render ───────────────────────────────────────────────
 
-if provider == "groq":
+load_conversations()
 
-    model = st.sidebar.selectbox(
-        "Select Model",
-        GROQ_MODELS
-    )
+# ── 5. Sidebar ─────────────────────────────────────────────────────────────────
 
-else:
+with st.sidebar:
+    st.markdown("## 🤖 LLM Chat")
+    st.divider()
 
-    model = st.sidebar.selectbox(
-        "Select Model",
-        GOOGLE_MODELS
-    )
-
-# ----------------------------
-# CREATE CHAT
-# ----------------------------
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("➕ Create New Chat")
-
-chat_title = st.sidebar.text_input(
-    "Chat Title"
-)
-
-if st.sidebar.button("Create Chat"):
-
-    if chat_title.strip() == "":
-        st.sidebar.warning("Please enter chat title")
-
-    else:
-
-        response = create_chat(
-            chat_title,
-            provider,
-            model
+    # ── New conversation ───────────────────────────────────────────────────────
+    with st.expander("➕  New Conversation"):
+        new_title = st.text_input(
+            "Title", placeholder="Conversation title…", key="new_conv_title"
         )
+        if st.button("Create", type="primary", use_container_width=True):
+            if new_title.strip():
+                res = _post("/conversations/add", {"title": new_title.strip()})
+                if res:
+                    select_conversation(res["session_id"])
+                    st.rerun()
+            else:
+                st.warning("Please enter a title.")
 
-        st.success("Chat Created")
+    st.divider()
+    st.markdown("**Conversations**")
 
-        st.rerun()
+    if not st.session_state.conversations:
+        st.caption("No conversations yet.")
 
-# ----------------------------
-# LIST CHATS
-# ----------------------------
+    for conv in st.session_state.conversations:
+        sid       = conv["session_id"]
+        status    = conv.get("status", "active")
+        icon      = STATUS_ICON.get(status, "⚪")
+        is_active = sid == st.session_state.active_session_id
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("💬 Chats")
+        col_btn, col_del = st.columns([5, 1])
+        with col_btn:
+            if st.button(
+                f"{icon} {conv['title']}",
+                key=f"conv_{sid}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+            ):
+                select_conversation(sid)
+                st.rerun()
+        with col_del:
+            if st.button("🗑", key=f"del_{sid}", help="Delete conversation"):
+                _delete("/conversations/delete", {"session_id": sid})
+                if st.session_state.active_session_id == sid:
+                    st.session_state.active_session_id = None
+                    st.session_state.messages = []
+                load_conversations()
+                st.rerun()
 
-chats = get_chats()
+# ── 6. Main tabs ───────────────────────────────────────────────────────────────
 
-if len(chats) == 0:
+tab_chat, tab_metrics, tab_system = st.tabs(
+    ["💬  Chat", "📊  Metrics", "🛠️  System"]
+)
 
-    st.info("No chats found")
+with tab_chat:
+    render_chat()
 
-for chat in chats:
+with tab_metrics:
+    render_metrics()
 
-    col1, col2 = st.sidebar.columns([5, 1])
-
-    with col1:
-
-        if st.button(
-            f"📌 {chat['title']}",
-            key=chat["_id"]
-        ):
-
-            st.session_state.selected_chat = chat["_id"]
-
-    with col2:
-
-        if st.button(
-            "❌",
-            key=f"delete_{chat['_id']}"
-        ):
-
-            delete_chat(chat["_id"])
-
-            if st.session_state.selected_chat == chat["_id"]:
-                st.session_state.selected_chat = None
-
-            st.rerun()
-
-# ----------------------------
-# MAIN CHAT AREA
-# ----------------------------
-
-selected_chat = st.session_state.selected_chat
-
-if selected_chat:
-
-    st.subheader("Conversation")
-
-    messages = get_messages(selected_chat)
-
-    # Display Messages
-    for msg in messages:
-
-        with st.chat_message(msg["role"]):
-
-            st.write(msg["content"])
-
-    # Chat Input
-    prompt = st.chat_input(
-        "Ask something..."
-    )
-
-    if prompt:
-
-        # Show user message instantly
-        with st.chat_message("user"):
-            st.write(prompt)
-
-        with st.spinner("Generating response..."):
-
-            send_message(
-                selected_chat,
-                provider,
-                model,
-                prompt
-            )
-
-        st.rerun()
-
-else:
-
-    st.markdown(
-        """
-        ## Welcome 👋
-
-        Create a chat from the sidebar and start talking with AI.
-
-        ### Features
-        - Multi Provider Support
-        - Groq + Google Models
-        - MongoDB Storage
-        - Chat CRUD Operations
-        - Dockerized Setup
-        """
-    )
+with tab_system:
+    render_system()
