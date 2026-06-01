@@ -225,7 +225,10 @@ async def get_token_stats(hours: int = 24) -> dict:
                 "_id": "$provider",
                 "prompt_tokens":     {"$sum": "$prompt_tokens"},
                 "completion_tokens": {"$sum": "$completion_tokens"},
-                "total_tokens":      {"$sum": "$total_tokens"},
+                "total_tokens":      {"$sum": {"$add": [
+                    "$prompt_tokens",
+                    "$completion_tokens"
+                ]}},
                 "call_count":        {"$sum": 1},
             }
         },
@@ -237,7 +240,10 @@ async def get_token_stats(hours: int = 24) -> dict:
         {
             "$group": {
                 "_id": {"provider": "$provider", "model": "$model"},
-                "total_tokens": {"$sum": "$total_tokens"},
+                "total_tokens": {"$sum": {"$add": [
+                    "$prompt_tokens",
+                    "$completion_tokens"
+                ]}},
                 "call_count":   {"$sum": 1},
             }
         },

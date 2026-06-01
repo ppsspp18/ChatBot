@@ -53,6 +53,7 @@ GOOGLE_MODELS = [
     "gemma-4-31b-it",
     "gemini-3.1-flash-lite"
 ]
+# deep seek = deepseek-v4-flash
 
 if provider == "groq":
 

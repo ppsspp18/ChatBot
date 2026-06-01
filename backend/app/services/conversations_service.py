@@ -224,7 +224,6 @@ async def send_message(data):
         ttft_ms=ttft_ms,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
-        total_tokens=total_tokens,
         status=llm_status,
         pii_detected=False,
         entities=[],

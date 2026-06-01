@@ -22,6 +22,7 @@ class DeepSeekProvider:
         response = client.chat.completions.create(
             model=model,
             messages=messages,
+            extra_body={"thinking": {"type": "disabled"}},
             temperature=0.7,
             max_tokens=1024
         )
@@ -42,6 +43,7 @@ class DeepSeekProvider:
             messages=messages,
             temperature=0.7,
             max_tokens=1024,
+            extra_body={"thinking": {"type": "disabled"}},
             stream=True
         )
 
