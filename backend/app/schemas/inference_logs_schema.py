@@ -15,6 +15,7 @@ class InferenceLogSchema(BaseModel):
 
     prompt_tokens: int
     completion_tokens: int
+    total_tokens: int
 
     status: Literal["success", "error", "cancelled"]
 

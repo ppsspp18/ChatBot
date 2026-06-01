@@ -1,11 +1,10 @@
 fastapi
-uvicorn
-pymongo
+uvicorn[standard]
 motor
+pymongo
 python-dotenv
 pydantic
-langchain
-langchain-community
+pydantic-settings
 groq
 google-generativeai
-
+sse-starlette

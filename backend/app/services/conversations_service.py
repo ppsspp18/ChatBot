@@ -16,27 +16,30 @@ from app.services.inference_logger import log_inference
 
 
 async def create_conversation(data):
+    """
+    data: CreateConversationRequest (has .title attribute)
+    Bug fix: previous code called with a raw str from the route.
+    """
     conversation = {
         "session_id": str(uuid4()),
         "title": data.title,
-        "provider": data.provider,
-        "model": data.model,
         "status": "active",
         "total_tokens": 0,
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow()
     }
-    
+
     await conversations_collection.insert_one(conversation)
 
     conversation["_id"] = str(conversation["_id"])
 
     return conversation
 
+
 async def edit_conversation(data):
     result = await conversations_collection.update_one(
         {"session_id": data.session_id},
-        {    
+        {
             "$set": {
                 "title": data.title,
                 "updated_at": datetime.utcnow()
@@ -54,10 +57,11 @@ async def edit_conversation(data):
         "message": "Conversation updated successfully"
     }
 
+
 async def get_all_conversations():
     conversations = []
 
-    async for conversation in conversations_collection.find():
+    async for conversation in conversations_collection.find().sort("updated_at", -1):
         conversation["_id"] = str(conversation["_id"])
         conversations.append(conversation)
 
@@ -78,6 +82,33 @@ async def get_conversation(session_id: UUID):
     conversation["_id"] = str(conversation["_id"])
 
     return conversation
+
+
+async def cancel_conversation(session_id: UUID):
+    """
+    Soft-cancel: sets status to 'cancelled', keeps all messages intact.
+    The frontend can still resume the conversation (history preserved).
+    """
+    result = await conversations_collection.update_one(
+        {"session_id": str(session_id)},
+        {
+            "$set": {
+                "status": "cancelled",
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
+
+    return {
+        "message": "Conversation cancelled successfully",
+        "session_id": str(session_id)
+    }
 
 
 async def delete_conversation(session_id: UUID):
@@ -110,23 +141,29 @@ async def send_message(data):
             status_code=404,
             detail="Conversation not found"
         )
-    
+
+    if conversation.get("status") == "cancelled":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot send messages to a cancelled conversation. Resume it first."
+        )
+
     recent_messages = (
         await messages_collection
         .find({"session_id": data.session_id})
         .sort("sequence", -1)
-        .limit(4)
-        .to_list(length=4)
+        .limit(10)
+        .to_list(length=10)
     )
 
     recent_messages.reverse()
 
+    # Bug fix: stored field is "message", not "content"
     context_messages = []
-
     for msg in recent_messages:
         context_messages.append({
             "role": msg["role"],
-            "content": msg["content"]
+            "content": msg["message"]
         })
 
     context_messages.append({
@@ -134,23 +171,31 @@ async def send_message(data):
         "content": data.message
     })
 
-
     start = time.time()
 
-    # Generate AI response
-    response = await router.generate(
-        provider=data.provider,
-        model=data.model,
-        messages=context_messages
-    )
+    try:
+        response = await router.generate(
+            provider=data.provider,
+            model=data.model,
+            messages=context_messages
+        )
+        llm_status = "success"
+        error_message = None
+    except Exception as exc:
+        llm_status = "error"
+        error_message = str(exc)
+        raise HTTPException(status_code=502, detail=f"LLM provider error: {exc}")
+    finally:
+        end = time.time()
 
     end = time.time()
-
     latency_ms = (end - start) * 1000
     ttft_ms = latency_ms
 
-    prompt_tokens = len(data.message.split())
-    completion_tokens = len(response.split())
+    # Token estimation (char-based, as per the deepseek formula already in place)
+    prompt_tokens = int(len(data.message) * 0.3)
+    completion_tokens = int(len(response) * 0.3)
+    total_tokens = prompt_tokens + completion_tokens
 
     sequence = await messages_collection.count_documents(
         {"session_id": data.session_id}
@@ -160,7 +205,9 @@ async def send_message(data):
     user_message = {
         "session_id": data.session_id,
         "role": "user",
-        "content": data.message,
+        "message": data.message,
+        "provider": data.provider,
+        "model": data.model,
         "sequence": sequence + 1,
         "timestamp": datetime.utcnow(),
         "inference_log_id": None
@@ -177,7 +224,8 @@ async def send_message(data):
         ttft_ms=ttft_ms,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
-        status="success",
+        total_tokens=total_tokens,
+        status=llm_status,
         pii_detected=False,
         entities=[],
         input_preview=data.message,
@@ -188,7 +236,9 @@ async def send_message(data):
     assistant_message = {
         "session_id": data.session_id,
         "role": "assistant",
-        "content": response,
+        "message": response,
+        "provider": data.provider,
+        "model": data.model,
         "sequence": sequence + 2,
         "timestamp": datetime.utcnow(),
         "inference_log_id": inference_result["log_id"]
@@ -196,7 +246,7 @@ async def send_message(data):
 
     await messages_collection.insert_one(assistant_message)
 
-    # Update conversation
+    # Update conversation token count
     await conversations_collection.update_one(
         {"session_id": data.session_id},
         {
@@ -204,15 +254,16 @@ async def send_message(data):
                 "updated_at": datetime.utcnow()
             },
             "$inc": {
-                "total_tokens": prompt_tokens + completion_tokens
+                "total_tokens": total_tokens
             }
         }
     )
 
     return {
         "response": response,
-        "latency_ms": latency_ms
+        "latency_ms": round(latency_ms, 2)
     }
+
 
 async def send_message_stream(data):
 
@@ -223,27 +274,29 @@ async def send_message_stream(data):
         )
 
         if not conversation:
-            raise HTTPException(
-                status_code=404,
-                detail="Conversation not found"
-            )
+            yield f"data: {json.dumps({'error': 'Conversation not found'})}\n\n"
+            return
+
+        if conversation.get("status") == "cancelled":
+            yield f"data: {json.dumps({'error': 'Conversation is cancelled'})}\n\n"
+            return
 
         recent_messages = (
             await messages_collection
             .find({"session_id": data.session_id})
             .sort("sequence", -1)
-            .limit(4)
-            .to_list(length=4)
+            .limit(10)
+            .to_list(length=10)
         )
 
         recent_messages.reverse()
 
+        # Bug fix: stored field is "message", not "content"
         context_messages = []
-
         for msg in recent_messages:
             context_messages.append({
                 "role": msg["role"],
-                "content": msg["content"]
+                "content": msg["message"]
             })
 
         context_messages.append({
@@ -252,36 +305,47 @@ async def send_message_stream(data):
         })
 
         start = time.time()
-
         full_response = ""
+        first_chunk = True
+        ttft_ms = 0.0
+        llm_status = "success"
+        error_message = None
 
-        async for chunk in router.generate_stream(
-            provider=data.provider,
-            model=data.model,
-            messages=context_messages
-        ):
+        try:
+            async for chunk in router.generate_stream(
+                provider=data.provider,
+                model=data.model,
+                messages=context_messages
+            ):
+                if first_chunk:
+                    ttft_ms = (time.time() - start) * 1000
+                    first_chunk = False
 
-            full_response += chunk
+                full_response += chunk
+                yield f"data: {json.dumps({'token': chunk})}\n\n"
 
-            yield f"data: {json.dumps({'token': chunk})}\n\n"
+        except Exception as exc:
+            llm_status = "error"
+            error_message = str(exc)
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
 
         end = time.time()
-
         latency_ms = (end - start) * 1000
-        ttft_ms = latency_ms
 
-        prompt_tokens = len(data.message.split())
-        completion_tokens = len(full_response.split())
+        prompt_tokens = int(len(data.message) * 0.3)
+        completion_tokens = int(len(full_response) * 0.3)
+        total_tokens = prompt_tokens + completion_tokens
 
         sequence = await messages_collection.count_documents(
             {"session_id": data.session_id}
         )
 
-
         user_message = {
             "session_id": data.session_id,
             "role": "user",
-            "content": data.message,
+            "message": data.message,
+            "provider": data.provider,
+            "model": data.model,
             "sequence": sequence + 1,
             "timestamp": datetime.utcnow(),
             "inference_log_id": None
@@ -297,37 +361,36 @@ async def send_message_stream(data):
             ttft_ms=ttft_ms,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
-            status="success",
+            total_tokens=total_tokens,
+            status=llm_status,
             pii_detected=False,
             entities=[],
             input_preview=data.message,
             output_preview=full_response
         )
 
-        assistant_message = {
-            "session_id": data.session_id,
-            "role": "assistant",
-            "content": full_response,
-            "sequence": sequence + 2,
-            "timestamp": datetime.utcnow(),
-            "inference_log_id": inference_result["log_id"]
-        }
-
-        await messages_collection.insert_one(assistant_message)
+        if full_response:
+            assistant_message = {
+                "session_id": data.session_id,
+                "role": "assistant",
+                "message": full_response,
+                "provider": data.provider,
+                "model": data.model,
+                "sequence": sequence + 2,
+                "timestamp": datetime.utcnow(),
+                "inference_log_id": inference_result["log_id"]
+            }
+            await messages_collection.insert_one(assistant_message)
 
         await conversations_collection.update_one(
             {"session_id": data.session_id},
             {
-                "$set": {
-                    "updated_at": datetime.utcnow()
-                },
-                "$inc": {
-                    "total_tokens": prompt_tokens + completion_tokens
-                }
+                "$set": {"updated_at": datetime.utcnow()},
+                "$inc": {"total_tokens": total_tokens}
             }
         )
 
-        yield f"data: {json.dumps({'done': True})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'latency_ms': round(latency_ms, 2), 'ttft_ms': round(ttft_ms, 2)})}\n\n"
 
     return StreamingResponse(
         event_generator(),
@@ -343,6 +406,8 @@ async def get_messages(session_id: UUID):
     ).sort("sequence", 1):
 
         message["_id"] = str(message["_id"])
+        if message.get("inference_log_id"):
+            message["inference_log_id"] = str(message["inference_log_id"])
         messages.append(message)
 
     return messages

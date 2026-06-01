@@ -18,7 +18,9 @@ class MessageSchema(BaseModel):
     )
     session_id: str
     role: Literal["user", "assistant", "system"]
-    content: str
+    message: str
+    provider: str
+    model: str
     sequence: int
     timestamp: datetime
     inference_log_id: Optional[ObjectId] = None
