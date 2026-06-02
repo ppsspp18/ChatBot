@@ -36,10 +36,10 @@ class LLMRouter:
         if not provider_instance:
             raise ValueError("Invalid provider")
 
-        async for chunk in provider_instance.generate_stream(
+        async for content in provider_instance.generate_stream(
             model=model,
             messages=messages
         ):
-            yield chunk
+            yield content
 
 router = LLMRouter()

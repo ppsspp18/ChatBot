@@ -290,7 +290,6 @@ async def send_message_stream(data):
 
         recent_messages.reverse()
 
-        # Bug fix: stored field is "message", not "content"
         context_messages = []
         for msg in recent_messages:
             context_messages.append({
@@ -311,7 +310,7 @@ async def send_message_stream(data):
         error_message = None
 
         try:
-            async for chunk in router.generate_stream(
+            async for content in router.generate_stream(
                 provider=data.provider,
                 model=data.model,
                 messages=context_messages
@@ -320,8 +319,8 @@ async def send_message_stream(data):
                     ttft_ms = (time.time() - start) * 1000
                     first_chunk = False
 
-                full_response += chunk
-                yield f"data: {json.dumps({'token': chunk})}\n\n"
+                full_response += content
+                yield content
 
         except Exception as exc:
             llm_status = "error"
@@ -360,7 +359,6 @@ async def send_message_stream(data):
             ttft_ms=ttft_ms,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
-            total_tokens=total_tokens,
             status=llm_status,
             pii_detected=False,
             entities=[],
@@ -368,8 +366,7 @@ async def send_message_stream(data):
             output_preview=full_response
         )
 
-        if full_response:
-            assistant_message = {
+        assistant_message = {
                 "session_id": data.session_id,
                 "role": "assistant",
                 "message": full_response,
@@ -379,7 +376,7 @@ async def send_message_stream(data):
                 "timestamp": datetime.utcnow(),
                 "inference_log_id": inference_result["log_id"]
             }
-            await messages_collection.insert_one(assistant_message)
+        await messages_collection.insert_one(assistant_message)
 
         await conversations_collection.update_one(
             {"session_id": data.session_id},
@@ -393,7 +390,7 @@ async def send_message_stream(data):
 
     return StreamingResponse(
         event_generator(),
-        media_type="text/event-stream"
+        media_type="text/event"
     )
 
 

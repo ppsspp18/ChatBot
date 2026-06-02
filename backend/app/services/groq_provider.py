@@ -1,4 +1,3 @@
-
 from groq import Groq
 from app.config.settings import GROQ_API_KEY
 
@@ -19,20 +18,34 @@ class GroqProvider:
     
     async def generate_stream(self, model, messages):
 
-        stream = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1024,
-            stream=True
-        )
+        try :
+            stream = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1024,
+                stream=True
+            )
 
-        for chunk in stream:
+            for chunk in stream:
+                try:
+                    if not chunk.choices:
+                        continue
 
-            if not chunk.choices:
-                continue
+                    delta = chunk.choices[0].delta
 
-            delta = chunk.choices[0].delta.content
+                    if delta is None:
+                        continue
 
-            if delta:
-                yield delta
+                    content = delta.content
+
+                    if content is not None:
+                        yield content
+                
+                except Exception:
+                    continue
+
+        except Exception as e:
+            yield f"\nERROR: {str(e)}"
+
+    
