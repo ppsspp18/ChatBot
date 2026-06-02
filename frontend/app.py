@@ -9,16 +9,12 @@ from api_client import (
 from config import PROVIDER_BADGE, SESSION_DEFAULTS, STATUS_ICON
 from views import render_chat, render_metrics, render_system
 
-# ── 1. Page config ─────────────────────────────────────────────────────────────
-
 st.set_page_config(
-    page_title="LLM Chat",
+    page_title="LLM ChatBot",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
-# ── 2. Global CSS ──────────────────────────────────────────────────────────────
 
 st.markdown(
     """
@@ -39,23 +35,19 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── 3. Session-state initialisation ───────────────────────────────────────────
 
 for _key, _default in SESSION_DEFAULTS.items():
     if _key not in st.session_state:
         st.session_state[_key] = _default
 
-# ── 4. Load data on every render ───────────────────────────────────────────────
 
 load_conversations()
 
-# ── 5. Sidebar ─────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown("## 🤖 LLM Chat")
+    st.markdown("## 🤖 LLM ChatBot")
     st.divider()
 
-    # ── New conversation ───────────────────────────────────────────────────────
     with st.expander("➕  New Conversation"):
         new_title = st.text_input(
             "Title", placeholder="Conversation title…", key="new_conv_title"
@@ -100,7 +92,6 @@ with st.sidebar:
                 load_conversations()
                 st.rerun()
 
-# ── 6. Main tabs ───────────────────────────────────────────────────────────────
 
 tab_chat, tab_metrics, tab_system = st.tabs(
     ["💬  Chat", "📊  Metrics", "🛠️  System"]

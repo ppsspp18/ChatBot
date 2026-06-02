@@ -2,7 +2,7 @@ import time, json
 from uuid import uuid4, UUID
 from datetime import datetime
 
-from fastapi import HTTPException
+from fastapi import HTTPException, logger
 from fastapi.responses import StreamingResponse
 
 
@@ -110,6 +110,28 @@ async def cancel_conversation(session_id: str):
         "session_id": str(session_id)
     }
 
+async def activate_conversation(session_id: str):
+    result = await conversations_collection.update_one(
+        {"session_id": session_id},
+        {
+            "$set": {
+                "status": "active",
+                "updated_at": datetime.utcnow()
+            }
+        }
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
+
+    return {
+        "message": "Conversation activated successfully",
+        "session_id": str(session_id)
+    }
+
 
 async def delete_conversation(session_id: str):
     result = await conversations_collection.delete_one(
@@ -173,27 +195,128 @@ async def send_message(data):
 
     start = time.time()
 
+    response = ""
+    llm_status = "error"
+    error_message = None
+
     try:
         response = await router.generate(
             provider=data.provider,
             model=data.model,
             messages=context_messages
         )
+
         llm_status = "success"
         error_message = None
+
+        if conversation.get("title") == "NEW CONVERSATION":
+
+            title_prompt = f"""
+                            Generate a short conversation title (2-5 words maximum).
+
+                            User message:
+                            {data.message}
+
+                            Rules:
+                            - No quotes
+                            - No punctuation
+                            - Keep it concise
+
+                            Only return the title.
+                            """
+
+            title_start = time.time()
+
+            try:
+
+                generated_title = await router.generate(
+                    provider=data.provider,
+                    model=data.model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": title_prompt
+                        }
+                    ]
+                )
+
+                title_end = time.time()
+
+                title_latency_ms = (title_end - title_start) * 1000
+                title_ttft_ms = title_latency_ms
+
+                generated_title = generated_title.strip().replace('"', '')
+                if not generated_title:
+                    generated_title = "NEW CONVERSATION"
+
+                title_prompt_tokens = int(len(title_prompt) * 0.3)
+                title_completion_tokens = int(len(generated_title) * 0.3)
+
+                await log_inference(
+                    session_id=data.session_id,
+                    provider=data.provider,
+                    model=data.model,
+                    latency_ms=title_latency_ms,
+                    ttft_ms=title_ttft_ms,
+                    prompt_tokens=title_prompt_tokens,
+                    completion_tokens=title_completion_tokens,
+                    status="success",
+                    pii_detected=False,
+                    entities=[],
+                    input_preview=title_prompt,
+                    output_preview=generated_title
+                )
+
+                await conversations_collection.update_one(
+                    {"session_id": data.session_id},
+                    {
+                        "$set": {
+                            "title": generated_title
+                        },
+                        "$inc": {
+                            "total_tokens": (
+                                title_prompt_tokens +
+                                title_completion_tokens
+                            )
+                        }
+                    }
+                )
+
+            except Exception as exc:
+
+                title_end = time.time()
+
+                title_latency_ms = (title_end - title_start) * 1000
+
+                await log_inference(
+                    session_id=data.session_id,
+                    provider=data.provider,
+                    model=data.model,
+                    latency_ms=title_latency_ms,
+                    ttft_ms=title_latency_ms,
+                    prompt_tokens=int(len(title_prompt) * 0.3),
+                    completion_tokens=0,
+                    status="error",
+                    pii_detected=False,
+                    entities=[],
+                    input_preview=title_prompt,
+                    output_preview=str(exc)
+                )
+                logger.exception("Title generation failed")
+                pass
+
     except Exception as exc:
         llm_status = "error"
         error_message = str(exc)
-        raise HTTPException(status_code=502, detail=f"LLM provider error: {exc}")
-    finally:
-        end = time.time()
-
+        
     end = time.time()
+
     latency_ms = (end - start) * 1000
     ttft_ms = latency_ms
 
     # Token estimation (char-based, as per the deepseek formula already in place)
-    prompt_tokens = int(len(data.message) * 0.3)
+    prompt_text = json.dumps(context_messages)
+    prompt_tokens = int(len(prompt_text) * 0.3)
     completion_tokens = int(len(response) * 0.3)
     total_tokens = prompt_tokens + completion_tokens
 
@@ -215,7 +338,7 @@ async def send_message(data):
 
     await messages_collection.insert_one(user_message)
 
-    # Save inference log
+
     inference_result = await log_inference(
         session_id=data.session_id,
         provider=data.provider,
@@ -228,7 +351,7 @@ async def send_message(data):
         pii_detected=False,
         entities=[],
         input_preview=data.message,
-        output_preview=response
+        output_preview=response or error_message
     )
 
     # Save assistant message
@@ -243,12 +366,17 @@ async def send_message(data):
         "inference_log_id": inference_result["log_id"]
     }
 
-    await messages_collection.insert_one(assistant_message)
+    if(llm_status == "success"):
+        await messages_collection.insert_one(assistant_message)
 
-    # Update conversation token count
+    else:
+        assistant_message["message"] = f"Error generating response: {error_message}" 
+        await messages_collection.insert_one(assistant_message)
+
+    
     await conversations_collection.update_one(
         {"session_id": data.session_id},
-        {
+            {
             "$set": {
                 "updated_at": datetime.utcnow()
             },
@@ -256,6 +384,12 @@ async def send_message(data):
                 "total_tokens": total_tokens
             }
         }
+    )
+
+    if llm_status == "error":
+        raise HTTPException(
+            status_code=502,
+            detail=f"LLM provider error: {error_message}"
     )
 
     return {
@@ -325,12 +459,12 @@ async def send_message_stream(data):
         except Exception as exc:
             llm_status = "error"
             error_message = str(exc)
-            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+            yield f"data: {json.dumps({'error': "Generation failed"})}\n\n"
 
         end = time.time()
         latency_ms = (end - start) * 1000
-
-        prompt_tokens = int(len(data.message) * 0.3)
+        prompt_text = json.dumps(context_messages) 
+        prompt_tokens = int(len(prompt_text) * 0.3)
         completion_tokens = int(len(full_response) * 0.3)
         total_tokens = prompt_tokens + completion_tokens
 
@@ -376,7 +510,11 @@ async def send_message_stream(data):
                 "timestamp": datetime.utcnow(),
                 "inference_log_id": inference_result["log_id"]
             }
-        await messages_collection.insert_one(assistant_message)
+        if(llm_status == "success" and full_response.strip()):
+            await messages_collection.insert_one(assistant_message)
+        else:
+            assistant_message["message"] = f"Error generating response: {error_message}" 
+            await messages_collection.insert_one(assistant_message)
 
         await conversations_collection.update_one(
             {"session_id": data.session_id},
@@ -385,6 +523,105 @@ async def send_message_stream(data):
                 "$inc": {"total_tokens": total_tokens}
             }
         )
+
+        if conversation.get("title") == "NEW CONVERSATION":
+            title_prompt = f"""
+                            Generate a short conversation title (2-5 words maximum).
+
+                            User message:
+                            {data.message}
+
+                            Rules:
+                            - No quotes
+                            - No punctuation
+                            - Keep it concise
+
+                            Only return the title.
+                            """
+
+            title_start = time.time()
+
+            try:
+
+                generated_title = await router.generate(
+                    provider=data.provider,
+                    model=data.model,
+                    messages=[
+                        {
+                        "role": "user",
+                        "content": title_prompt
+                        }
+                    ]
+                )
+
+                title_end = time.time()
+
+                title_latency_ms = (title_end - title_start) * 1000
+                title_ttft_ms = title_latency_ms
+
+                generated_title = generated_title.strip().replace('"', '')
+                if not generated_title:
+                    generated_title = "NEW CONVERSATION"
+
+                title_prompt_tokens = int(len(title_prompt) * 0.3)
+                title_completion_tokens = int(len(generated_title) * 0.3)
+                title_total_tokens = (
+                    title_prompt_tokens +
+                    title_completion_tokens
+                )
+
+                await log_inference(
+                    session_id=data.session_id,
+                    provider=data.provider,
+                    model=data.model,
+                    latency_ms=title_latency_ms,
+                    ttft_ms=title_ttft_ms,
+                    prompt_tokens=title_prompt_tokens,
+                    completion_tokens=title_completion_tokens,
+                    status="success",
+                    pii_detected=False,
+                    entities=[],
+                    input_preview=title_prompt,
+                    output_preview=generated_title
+                )
+
+                await conversations_collection.update_one(
+                    {"session_id": data.session_id},
+                    {
+                    "$set": {
+                            "title": generated_title
+                    },
+                    "$inc": {
+                            "total_tokens": title_total_tokens
+                    }
+                    }
+                )
+
+            except Exception as exc:
+
+                title_end = time.time()
+
+                title_latency_ms = (
+                    title_end - title_start
+                ) * 1000
+
+                await log_inference(
+                    session_id=data.session_id,
+                    provider=data.provider,
+                    model=data.model,
+                    latency_ms=title_latency_ms,
+                    ttft_ms=title_latency_ms,
+                    prompt_tokens=int(len(title_prompt) * 0.3),
+                    completion_tokens=0,
+                    status="error",
+                    pii_detected=False,
+                    entities=[],
+                    input_preview=title_prompt,
+                    output_preview=str(exc)
+                )
+
+            pass
+
 
         yield f"data: {json.dumps({'done': True, 'latency_ms': round(latency_ms, 2), 'ttft_ms': round(ttft_ms, 2)})}\n\n"
 
