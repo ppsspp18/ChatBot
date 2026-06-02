@@ -1,95 +1,61 @@
-import json
-
 import requests
-import streamlit as st
-
 from config import BACKEND_URL
 
+def create_conversation(title: str = "NEW CONVERSATION") -> dict:
+    res = requests.post(f"{BACKEND_URL}/conversations/add", json={"title": title})
+    res.raise_for_status()
+    return res.json()
 
-def _get(path: str, params: dict | None = None):
-    try:
-        r = requests.get(f"{BACKEND_URL}{path}", params=params, timeout=15)
-        r.raise_for_status()
-        return r.json()
-    except requests.exceptions.ConnectionError:
-        st.error("❌ Cannot reach backend. Is it running?")
-    except Exception as exc:
-        st.error(f"❌ GET {path} failed: {exc}")
-    return None
+def get_all_conversations() -> list:
+    res = requests.get(f"{BACKEND_URL}/conversations/all")
+    res.raise_for_status()
+    return res.json()
 
+def get_conversation(session_id: str) -> dict:
+    res = requests.get(f"{BACKEND_URL}/conversations/get", params={"session_id": session_id})
+    res.raise_for_status()
+    return res.json()
 
-def _post(path: str, body: dict | None = None):
-    try:
-        r = requests.post(f"{BACKEND_URL}{path}", json=body, timeout=15)
-        r.raise_for_status()
-        return r.json()
-    except Exception as exc:
-        st.error(f"❌ POST {path} failed: {exc}")
-    return None
+def edit_conversation(session_id: str, title: str) -> dict:
+    res = requests.post(f"{BACKEND_URL}/conversations/edit", json={"session_id": session_id, "title": title})
+    res.raise_for_status()
+    return res.json()
 
+def delete_conversation(session_id: str) -> dict:
+    res = requests.delete(f"{BACKEND_URL}/conversations/delete", params={"session_id": session_id})
+    res.raise_for_status()
+    return res.json()
 
-def _patch(path: str, params: dict | None = None):
-    try:
-        r = requests.patch(f"{BACKEND_URL}{path}", params=params, timeout=15)
-        r.raise_for_status()
-        return r.json()
-    except Exception as exc:
-        st.error(f"❌ PATCH {path} failed: {exc}")
-    return None
+def get_messages(session_id: str) -> list:
+    res = requests.get(f"{BACKEND_URL}/messages/all", params={"session_id": session_id})
+    res.raise_for_status()
+    return res.json()
 
+# --- NEW: Non-Streaming Route ---
+def send_message(session_id: str, message: str, provider: str, model: str) -> dict:
+    res = requests.post(
+        f"{BACKEND_URL}/messages/send",
+        json={
+            "session_id": session_id,
+            "provider": provider,
+            "model": model,
+            "message": message
+        },
+        timeout=60
+    )
+    res.raise_for_status()
+    return res.json()
 
-def _delete(path: str, params: dict | None = None):
-    try:
-        r = requests.delete(f"{BACKEND_URL}{path}", params=params, timeout=15)
-        r.raise_for_status()
-        return r.json()
-    except Exception as exc:
-        st.error(f"❌ DELETE {path} failed: {exc}")
-    return None
-
-def _stream_tokens(session_id: str, message: str, provider: str, model: str):
-    payload = {
-        "session_id": session_id,
-        "message":    message,
-        "provider":   provider,
-        "model":      model,
-    }
-
-    response_container = st.empty()
-    full_response = ""
-    try:
-        with requests.post(
-            f"{BACKEND_URL}/messages/send/stream",
-            json=payload,
-            stream=True,
-            timeout=120,
-        ) as response:  
-            for chunk in response.iter_content(
-                    chunk_size=1,
-                    decode_unicode=True
-                ):
-
-                    if chunk:
-
-                        full_response += chunk
-
-                        response_container.markdown(full_response)
-    
-    except requests.exceptions.RequestException as e:
-        st.error(f"Request failed: {e}")
-
-
-def load_conversations() -> None:
-    data = _get("/conversations/all")
-    st.session_state.conversations = data or []
-
-
-def load_messages(session_id: str) -> None:
-    data = _get("/messages/all", {"session_id": session_id})
-    st.session_state.messages = data or []
-
-
-def select_conversation(session_id: str) -> None:
-    st.session_state.active_session_id = session_id
-    st.session_state.rename_mode = False
-    load_messages(session_id)
+# --- Streaming Route ---
+def send_message_stream(session_id: str, message: str, provider: str, model: str):
+    return requests.post(
+        f"{BACKEND_URL}/messages/send/stream",
+        json={
+            "session_id": session_id,
+            "provider": provider,
+            "model": model,
+            "message": message
+        },
+        stream=True,
+        timeout=60
+    )

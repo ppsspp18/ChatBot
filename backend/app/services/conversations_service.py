@@ -459,7 +459,7 @@ async def send_message_stream(data):
         except Exception as exc:
             llm_status = "error"
             error_message = str(exc)
-            yield f"data: {json.dumps({'error': "Generation failed"})}\n\n"
+            yield f"data: {json.dumps({'error': 'Generation Failed'})}\n\n"
 
         end = time.time()
         latency_ms = (end - start) * 1000
