@@ -4,13 +4,13 @@ import api_client
 from config import PROVIDERS_MODELS, PROVIDER_BADGE
 
 def render():
-    # Initialize Session State
+    # --- SESSION STATE INITIALIZATION ---
     if "current_session_id" not in st.session_state:
         st.session_state.current_session_id = None
     if "conversations" not in st.session_state:
         st.session_state.conversations = []
     
-    # NEW: Track which conversation is currently being edited
+    # Track which conversation is currently being edited
     if "editing_id" not in st.session_state:
         st.session_state.editing_id = None
         
@@ -62,7 +62,7 @@ def render():
                         key=f"edit_input_{conv['session_id']}"
                     )
                 with col2:
-                    if st.button("💾", key=f"save_{conv['session_id']}"):
+                    if st.button("💾", key=f"save_{conv['session_id']}", use_container_width=True):
                         try:
                             api_client.edit_conversation(conv['session_id'], new_title)
                             st.session_state.editing_id = None
@@ -71,13 +71,14 @@ def render():
                         except Exception as e:
                             st.error(f"Failed to edit: {e}")
                 with col3:
-                    if st.button("❌", key=f"cancel_{conv['session_id']}"):
+                    if st.button("❌", key=f"cancel_{conv['session_id']}", use_container_width=True):
                         st.session_state.editing_id = None
                         st.rerun()
                         
-            # 2. STANDARD READ MODE UI
+            # 2. STANDARD READ MODE UI (Updated with 3-dot Popover)
             else:
-                col1, col2, col3 = st.columns([6, 2, 2])
+                # Adjusted column ratio to accommodate the popover neatly
+                col1, col2 = st.columns([8, 2])
                 with col1:
                     is_active = (st.session_state.current_session_id == conv['session_id'])
                     btn_label = f"**{conv['title']}**" if is_active else conv['title']
@@ -86,20 +87,23 @@ def render():
                         st.session_state.current_session_id = conv['session_id']
                         st.session_state.editing_id = None # Reset edit state on switch
                         st.rerun()
+                        
                 with col2:
-                    if st.button("✏️", key=f"edit_btn_{conv['session_id']}"):
-                        st.session_state.editing_id = conv['session_id']
-                        st.rerun()
-                with col3:
-                    if st.button("🗑️", key=f"del_{conv['session_id']}"):
-                        try:
-                            api_client.delete_conversation(conv['session_id'])
-                            if st.session_state.current_session_id == conv['session_id']:
-                                st.session_state.current_session_id = None
-                            load_conversations()
+                    # 3-dot Popover menu replaces the separate Edit/Delete buttons
+                    with st.popover("⋮", use_container_width=True):
+                        if st.button("✏️ Rename", key=f"edit_btn_{conv['session_id']}", use_container_width=True):
+                            st.session_state.editing_id = conv['session_id']
                             st.rerun()
-                        except Exception as e:
-                            st.error(f"Failed to delete conversation: {e}")
+                            
+                        if st.button("🗑️ Delete", key=f"del_{conv['session_id']}", use_container_width=True):
+                            try:
+                                api_client.delete_conversation(conv['session_id'])
+                                if st.session_state.current_session_id == conv['session_id']:
+                                    st.session_state.current_session_id = None
+                                load_conversations()
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Failed to delete conversation: {e}")
 
     # --- MAIN CHAT UI ---
     if not st.session_state.current_session_id:
@@ -123,33 +127,40 @@ def render():
     except Exception as e:
         st.error(f"Failed to load messages: {e}")
 
-
-    # --- INPUT SETTINGS BUNDLED WITH PROMPT ---
     st.write("") # Spacer to push it to the bottom
     
-    # We place the settings right before the chat_input so they visually cluster together.
-    col1, col2, col3 = st.columns([3, 3, 2])
+    # Pre-calculate combined provider/model options
+    combo_options = []
+    for prov, models in PROVIDERS_MODELS.items():
+        for mod in models:
+            combo_options.append((prov, mod))
+            
+    # Formatter for the Selectbox
+    def format_combo(option):
+        prov, mod = option
+        badge = PROVIDER_BADGE.get(prov, prov.capitalize())
+        return f"{badge} {prov.capitalize()} / {mod}"
+
+    # Determine default index based on current session state
+    current_selection = (st.session_state.provider, st.session_state.model)
+    default_idx = combo_options.index(current_selection) if current_selection in combo_options else 0
+
+    # Cluster settings: Single dropdown and Stream checkbox
+    col1, col2 = st.columns([7, 3])
     with col1:
-        provider = st.selectbox(
-            "Provider",
-            options=list(PROVIDERS_MODELS.keys()),
-            index=list(PROVIDERS_MODELS.keys()).index(st.session_state.provider) if st.session_state.provider in PROVIDERS_MODELS else 0,
-            format_func=lambda x: PROVIDER_BADGE.get(x, x),
+        selected_combo = st.selectbox(
+            "Model Selection",
+            options=combo_options,
+            index=default_idx,
+            format_func=format_combo,
             label_visibility="collapsed" # Hides the label for a cleaner inline look
         )
-        st.session_state.provider = provider
+        # Unpack the tuple back into session state
+        st.session_state.provider, st.session_state.model = selected_combo
         
     with col2:
-        model_opts = PROVIDERS_MODELS.get(st.session_state.provider, [])
-        model = st.selectbox(
-            "Model",
-            options=model_opts,
-            index=model_opts.index(st.session_state.model) if st.session_state.model in model_opts else 0,
-            label_visibility="collapsed"
-        )
-        st.session_state.model = model
-        
-    with col3:
+        # Padded with a tiny bit of markdown so it aligns nicely with the selectbox
+        st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
         st.session_state.stream_enabled = st.checkbox(
             "Enable Streaming", 
             value=st.session_state.stream_enabled
@@ -162,15 +173,6 @@ def render():
         # Render user prompt immediately
         with st.chat_message("user"):
             st.markdown(prompt)
-
-        # Auto-rename "NEW CONVERSATION" logic
-        if current_chat and current_chat["title"] == "NEW CONVERSATION":
-            new_title = prompt[:30] + "..." if len(prompt) > 30 else prompt
-            try:
-                api_client.edit_conversation(st.session_state.current_session_id, new_title)
-                load_conversations() # Updates the sidebar behind the scenes
-            except Exception:
-                pass # Silently proceed to not block message generation
 
         # Generate response
         with st.chat_message("assistant"):
@@ -187,7 +189,6 @@ def render():
                         model=st.session_state.model
                     ) as response:
                         
-                        # Use your working iteration logic
                         for chunk in response.iter_content(chunk_size=1, decode_unicode=True):
                             if chunk:
                                 full_response += chunk
@@ -207,7 +208,6 @@ def render():
                         )
                         
                         # Extracts the message string from the API JSON response
-                        # (Assumes your backend responds with {"message": "..."} or {"response": "..."})
                         full_response = response_data.get("message", response_data.get("response", ""))
                         
                         # Fallback in case the backend returns raw text
@@ -219,5 +219,13 @@ def render():
             except requests.exceptions.RequestException as e:
                 st.error(f"Request failed: {e}")
 
-        # Rerun to fetch the finalized messages from the DB
+        if current_chat and current_chat["title"] == "NEW CONVERSATION":
+            # backend will automatically update the title based on the first user message. 
+            try:
+                load_conversations() 
+            except Exception:
+                pass
         st.rerun()
+
+if __name__ == "__main__":
+    render()

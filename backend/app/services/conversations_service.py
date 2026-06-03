@@ -230,8 +230,8 @@ async def send_message(data):
             try:
 
                 generated_title = await router.generate(
-                    provider=data.provider,
-                    model=data.model,
+                    provider="groq",
+                    model="openai/gpt-oss-20b",
                     messages=[
                         {
                             "role": "user",
@@ -254,8 +254,8 @@ async def send_message(data):
 
                 await log_inference(
                     session_id=data.session_id,
-                    provider=data.provider,
-                    model=data.model,
+                    provider="groq",
+                    model="openai/gpt-oss-20b",
                     latency_ms=title_latency_ms,
                     ttft_ms=title_ttft_ms,
                     prompt_tokens=title_prompt_tokens,
@@ -290,8 +290,8 @@ async def send_message(data):
 
                 await log_inference(
                     session_id=data.session_id,
-                    provider=data.provider,
-                    model=data.model,
+                    provider="groq",
+                    model="openai/gpt-oss-20b",
                     latency_ms=title_latency_ms,
                     ttft_ms=title_latency_ms,
                     prompt_tokens=int(len(title_prompt) * 0.3),
@@ -526,17 +526,12 @@ async def send_message_stream(data):
 
         if conversation.get("title") == "NEW CONVERSATION":
             title_prompt = f"""
-                            Generate a short conversation title (2-5 words maximum).
-
-                            User message:
-                            {data.message}
-
-                            Rules:
-                            - No quotes
-                            - No punctuation
-                            - Keep it concise
-
+                            Generate a short conversation title in two to four words 
+                            based on the following user message. 
+                            User message: {data.message}, 
                             Only return the title.
+                            Example: if the user message is "How do I reset my password?", 
+                            a good title would be "Password Reset Help".
                             """
 
             title_start = time.time()
@@ -544,8 +539,8 @@ async def send_message_stream(data):
             try:
 
                 generated_title = await router.generate(
-                    provider=data.provider,
-                    model=data.model,
+                    provider="groq",
+                    model="openai/gpt-oss-20b",
                     messages=[
                         {
                         "role": "user",
@@ -572,8 +567,8 @@ async def send_message_stream(data):
 
                 await log_inference(
                     session_id=data.session_id,
-                    provider=data.provider,
-                    model=data.model,
+                    provider="groq",
+                    model="openai/gpt-oss-20b",
                     latency_ms=title_latency_ms,
                     ttft_ms=title_ttft_ms,
                     prompt_tokens=title_prompt_tokens,
@@ -607,8 +602,8 @@ async def send_message_stream(data):
 
                 await log_inference(
                     session_id=data.session_id,
-                    provider=data.provider,
-                    model=data.model,
+                    provider="groq",
+                    model="openai/gpt-oss-20b",
                     latency_ms=title_latency_ms,
                     ttft_ms=title_latency_ms,
                     prompt_tokens=int(len(title_prompt) * 0.3),
