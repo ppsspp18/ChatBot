@@ -16,6 +16,8 @@ from app.services.conversations_service import (
     get_messages
 )
 
+from app.services.ollama_service import get_ollama_messages
+
 router = APIRouter(tags=["Conversations"])
 
 
@@ -63,6 +65,9 @@ async def send_message_route(data: MessageRequest):
 async def send_message_stream_route(data: MessageRequest):
     return await send_message_stream(data)
 
+@router.post("/messages/send/ollama")
+async def get_ollama_messages_route(data: MessageRequest):
+    return await get_ollama_messages(data)
 
 @router.get("/messages/all")
 async def get_messages_route(session_id: str):
