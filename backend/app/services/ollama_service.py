@@ -1,7 +1,7 @@
 from datetime import datetime
 from ollama import AsyncClient
 
-from app.schemas.messages_schema import MessageRequest, MessageSchema
+from backend.app.schemas.message_schema import MessageRequest, MessageSchema
 
 # Replace these with your actual repository functions
 from app.repositories.messages import (

@@ -9,9 +9,11 @@ from app.ingestion.event_bus import event_bus
 from app.ingestion.worker import worker_loop
 from app.database.indexes import create_indexes
 
-from app.routes.conversations_routes import router as conversations_router
+from backend.app.routes.conversation_routes import router as conversations_router
+from app.routes.messages_routes import router as messages_router
+from app.routes.modes_routes import router as modes_router
 from app.routes.ingest_routes import router as ingest_router
-from app.routes.metrics_routes import router as metrics_router
+from backend.app.routes.metric_routes import router as metrics_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,7 +42,7 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # ── Shutdown ──────────────────────────────────────────────────────────────
+    # Shutdown 
     logger.info("Shutting down...")
     worker_task.cancel()
     try:
@@ -60,7 +62,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
+# CORS 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],      # tighten to your Render/Vercel URLs in production
@@ -69,13 +71,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Routers ───────────────────────────────────────────────────────────────────
+# Routers
 app.include_router(conversations_router)
+app.include_router(messages_router)
+app.include_router(modes_router)
 app.include_router(ingest_router)
 app.include_router(metrics_router)
 
-
-# ── Health ────────────────────────────────────────────────────────────────────
+# Health 
 @app.get("/", tags=["Health"])
 @app.get("/health", tags=["Health"])
 async def health():

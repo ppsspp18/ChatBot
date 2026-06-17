@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 
-from app.services.metrics_service import (
+from backend.app.services.metric_service import (
     get_overview,
     get_latency_stats,
     get_error_stats,

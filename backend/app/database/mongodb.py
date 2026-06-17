@@ -10,7 +10,8 @@ client = AsyncIOMotorClient(
 
 db = client[DATABASE_NAME]
 
-conversations_collection = db["conversations"]
-messages_collection = db["messages"]
-inference_logs_collection = db["inference_logs"]
-events_collection = db["events"]
+conversation_collection = db["conversations"]
+message_collection = db["messages"]
+inference_log_collection = db["inference_logs"]
+event_collection = db["events"]
+mode_collection = db["modes"]
