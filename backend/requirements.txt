@@ -9,3 +9,10 @@ groq
 openai
 google-generativeai
 sse-starlette
+langchain-core
+langchain-groq
+langchain-openai
+langchain-google-genai
+langchain-ollama
+python-multipart
+torch

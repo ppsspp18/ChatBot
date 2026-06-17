@@ -155,7 +155,8 @@ async def send_message(data):
 
             try:
 
-                generated_title = await generate_stream(
+                generated_title = ""
+                async for chunk in generate_stream(
                     provider="groq",
                     model="openai/gpt-oss-20b",
                     messages=[
@@ -164,7 +165,8 @@ async def send_message(data):
                         "content": title_prompt
                         }
                     ]
-                )
+                ):
+                    generated_title += chunk
 
                 title_end = time.time()
 

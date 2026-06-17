@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from app.ingestion.event_bus import event_bus
-from app.database.mongodb import inference_logs_collection, events_collection
+from app.database.mongodb import inference_log_collection, event_collection
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +32,14 @@ async def _persist_inference_log(data: dict) -> None:
         "created_at":        data.get("created_at") or datetime.utcnow(),
         "source":            "ingest_api",          # marks external ingestion
     }
-    await inference_logs_collection.insert_one(log)
+    await inference_log_collection.insert_one(log)
     logger.debug("Persisted inference log %s", log["log_id"])
 
 
 async def _record_event(event_type: str, session_id: str, payload: dict,
                         status: str = "processed") -> None:
     """Write a lifecycle event to the events collection."""
-    await events_collection.insert_one({
+    await event_collection.insert_one({
         "event_id":   str(uuid4()),
         "event_type": event_type,
         "session_id": session_id,

@@ -9,11 +9,11 @@ from app.ingestion.event_bus import event_bus
 from app.ingestion.worker import worker_loop
 from app.database.indexes import create_indexes
 
-from backend.app.routes.conversation_routes import router as conversations_router
-from app.routes.messages_routes import router as messages_router
-from app.routes.modes_routes import router as modes_router
+from app.routes.conversation_routes import router as conversations_router
+from app.routes.message_routes import router as messages_router
+from app.routes.mode_routes import router as modes_router
 from app.routes.ingest_routes import router as ingest_router
-from backend.app.routes.metric_routes import router as metrics_router
+from app.routes.metric_routes import router as metrics_router
 
 logging.basicConfig(
     level=logging.INFO,

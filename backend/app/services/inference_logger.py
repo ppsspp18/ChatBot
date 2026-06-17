@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import uuid4
 
-from app.database.mongodb import inference_logs_collection
+from app.database.mongodb import inference_log_collection
 
 
 async def log_inference(
@@ -44,7 +44,7 @@ async def log_inference(
         "created_at": datetime.utcnow()
     }
 
-    result = await inference_logs_collection.insert_one(log)
+    result = await inference_log_collection.insert_one(log)
 
     return {
         "inserted_id": str(result.inserted_id),

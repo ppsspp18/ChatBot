@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 import math
 
-from app.database.mongodb import inference_logs_collection, conversations_collection
+from app.database.mongodb import inference_log_collection, conversation_collection
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ async def get_overview(hours: int = 24) -> dict:
         },
     ]
 
-    result = await inference_logs_collection.aggregate(pipeline).to_list(1)
+    result = await inference_log_collection.aggregate(pipeline).to_list(1)
 
     if not result:
         return {
@@ -74,7 +74,7 @@ async def get_latency_stats(hours: int = 24) -> dict:
     match = _time_filter(hours)
 
     # Fetch all latency values in the window (sorted ascending)
-    cursor = inference_logs_collection.find(
+    cursor = inference_log_collection.find(
         match, {"latency_ms": 1, "created_at": 1, "_id": 0}
     ).sort("latency_ms", 1)
 
@@ -112,7 +112,7 @@ async def get_latency_stats(hours: int = 24) -> dict:
         {"$sort": {"_id.year": 1, "_id.month": 1, "_id.day": 1, "_id.hour": 1}},
     ]
 
-    ts_docs = await inference_logs_collection.aggregate(pipeline_ts).to_list(1000)
+    ts_docs = await inference_log_collection.aggregate(pipeline_ts).to_list(1000)
     time_series = []
     for doc in ts_docs:
         g = doc["_id"]
@@ -145,14 +145,14 @@ async def get_error_stats(hours: int = 24) -> dict:
     match = {"$match": {**_time_filter(hours), "status": "error"}}
 
     # By provider
-    by_provider = await inference_logs_collection.aggregate([
+    by_provider = await inference_log_collection.aggregate([
         match,
         {"$group": {"_id": "$provider", "count": {"$sum": 1}}},
         {"$sort": {"count": -1}},
     ]).to_list(100)
 
     # By error message category (first 80 chars as key)
-    by_type = await inference_logs_collection.aggregate([
+    by_type = await inference_log_collection.aggregate([
         match,
         {
             "$group": {
@@ -188,7 +188,7 @@ async def get_error_stats(hours: int = 24) -> dict:
         },
         {"$sort": {"_id.year": 1, "_id.month": 1, "_id.day": 1, "_id.hour": 1}},
     ]
-    ts_docs = await inference_logs_collection.aggregate(ts_pipeline).to_list(1000)
+    ts_docs = await inference_log_collection.aggregate(ts_pipeline).to_list(1000)
     time_series = []
     for doc in ts_docs:
         g = doc["_id"]
@@ -218,7 +218,7 @@ async def get_token_stats(hours: int = 24) -> dict:
     """
     match = _time_filter(hours)
 
-    by_provider = await inference_logs_collection.aggregate([
+    by_provider = await inference_log_collection.aggregate([
         {"$match": match},
         {
             "$group": {
@@ -235,7 +235,7 @@ async def get_token_stats(hours: int = 24) -> dict:
         {"$sort": {"total_tokens": -1}},
     ]).to_list(50)
 
-    by_model = await inference_logs_collection.aggregate([
+    by_model = await inference_log_collection.aggregate([
         {"$match": match},
         {
             "$group": {
@@ -303,7 +303,7 @@ async def get_throughput_stats(hours: int = 24) -> dict:
         }},
     ]
 
-    docs = await inference_logs_collection.aggregate(pipeline).to_list(10_000)
+    docs = await inference_log_collection.aggregate(pipeline).to_list(10_000)
 
     per_minute = []
     for doc in docs:
