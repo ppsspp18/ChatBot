@@ -6,9 +6,9 @@ class ModeRequest(BaseModel):
     description: str
     system_prompt: str
 
-class Mode(BaseModel):
-    mode_id : str
-    title: str       
-    description: str        
+class ModeSchema(BaseModel):
+    mode_id: str
+    title: str
+    description: str
     system_prompt: str
     updated_at: datetime

@@ -7,11 +7,11 @@ from fastapi.responses import StreamingResponse
 
 
 from app.database.mongodb import (
-    conversations_collection,
-    messages_collection
+    conversation_collection,
+    message_collection
 )
 
-from app.services.llm_router import router
+from app.services.langchain_provider import generate_stream
 from app.services.inference_logger import log_inference
 
 
@@ -19,7 +19,7 @@ async def send_message(data):
 
     async def event_generator():
 
-        conversation = await conversations_collection.find_one(
+        conversation = await conversation_collection.find_one(
             {"session_id": data.session_id}
         )
 
@@ -32,7 +32,7 @@ async def send_message(data):
             return
 
         recent_messages = (
-            await messages_collection
+            await message_collection
             .find({"session_id": data.session_id})
             .sort("sequence", -1)
             .limit(10)
@@ -61,7 +61,7 @@ async def send_message(data):
         error_message = None
 
         try:
-            async for content in router.generate_stream(
+            async for content in generate_stream(
                 provider=data.provider,
                 model=data.model,
                 messages=context_messages
@@ -71,7 +71,7 @@ async def send_message(data):
                     first_chunk = False
 
                 full_response += content
-                yield content
+                yield f"data: {json.dumps({'content': content})}\n\n"
 
         except Exception as exc:
             llm_status = "error"
@@ -85,7 +85,7 @@ async def send_message(data):
         completion_tokens = int(len(full_response) * 0.3)
         total_tokens = prompt_tokens + completion_tokens
 
-        sequence = await messages_collection.count_documents(
+        sequence = await message_collection.count_documents(
             {"session_id": data.session_id}
         )
 
@@ -100,7 +100,7 @@ async def send_message(data):
             "inference_log_id": None
         }
 
-        await messages_collection.insert_one(user_message)
+        await message_collection.insert_one(user_message)
 
         inference_result = await log_inference(
             session_id=data.session_id,
@@ -128,12 +128,12 @@ async def send_message(data):
                 "inference_log_id": inference_result["log_id"]
             }
         if(llm_status == "success" and full_response.strip()):
-            await messages_collection.insert_one(assistant_message)
+            await message_collection.insert_one(assistant_message)
         else:
             assistant_message["message"] = f"Error generating response: {error_message}" 
-            await messages_collection.insert_one(assistant_message)
+            await message_collection.insert_one(assistant_message)
 
-        await conversations_collection.update_one(
+        await conversation_collection.update_one(
             {"session_id": data.session_id},
             {
                 "$set": {"updated_at": datetime.utcnow()},
@@ -155,7 +155,7 @@ async def send_message(data):
 
             try:
 
-                generated_title = await router.generate(
+                generated_title = await generate_stream(
                     provider="groq",
                     model="openai/gpt-oss-20b",
                     messages=[
@@ -197,7 +197,7 @@ async def send_message(data):
                     output_preview=generated_title
                 )
 
-                await conversations_collection.update_one(
+                await conversation_collection.update_one(
                     {"session_id": data.session_id},
                     {
                     "$set": {
@@ -239,14 +239,14 @@ async def send_message(data):
 
     return StreamingResponse(
         event_generator(),
-        media_type="text/event"
+        media_type="text/event-stream"
     )
 
 
 async def get_messages(session_id: str):
     messages = []
 
-    async for message in messages_collection.find(
+    async for message in message_collection.find(
         {"session_id": session_id}
     ).sort("sequence", 1):
 

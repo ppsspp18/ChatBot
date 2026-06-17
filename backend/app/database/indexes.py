@@ -2,10 +2,10 @@ import logging
 from pymongo import ASCENDING, DESCENDING, IndexModel
 
 from app.database.mongodb import (
-    conversations_collection,
-    messages_collection,
-    inference_logs_collection,
-    events_collection,
+    conversation_collection,
+    message_collection,
+    inference_log_collection,
+    event_collection,
 )
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ async def create_indexes() -> None:
     """
 
     # ── conversations ────────────────────────────────────────────────────────
-    await conversations_collection.create_indexes([
+    await conversation_collection.create_indexes([
         IndexModel([("session_id", ASCENDING)], unique=True, name="session_id_unique"),
         IndexModel([("status",     ASCENDING)], name="status"),
         IndexModel([("created_at", DESCENDING)], name="created_at_desc"),
@@ -27,7 +27,7 @@ async def create_indexes() -> None:
     ])
 
     # ── messages ─────────────────────────────────────────────────────────────
-    await messages_collection.create_indexes([
+    await message_collection.create_indexes([
         IndexModel([("session_id", ASCENDING)],  name="session_id"),
         # Compound index for ordered retrieval per conversation
         IndexModel(
@@ -38,7 +38,7 @@ async def create_indexes() -> None:
     ])
 
     # ── inference_logs ───────────────────────────────────────────────────────
-    await inference_logs_collection.create_indexes([
+    await inference_log_collection.create_indexes([
         IndexModel([("log_id",     ASCENDING)], unique=True, name="log_id_unique"),
         IndexModel([("session_id", ASCENDING)], name="session_id"),
         IndexModel([("provider",   ASCENDING)], name="provider"),
@@ -52,7 +52,7 @@ async def create_indexes() -> None:
     ])
 
     # ── events ───────────────────────────────────────────────────────────────
-    await events_collection.create_indexes([
+    await event_collection.create_indexes([
         IndexModel([("event_id",   ASCENDING)], unique=True, name="event_id_unique"),
         IndexModel([("event_type", ASCENDING)], name="event_type"),
         IndexModel([("processed",  ASCENDING)], name="processed"),

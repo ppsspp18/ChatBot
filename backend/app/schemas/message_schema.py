@@ -3,24 +3,23 @@ from typing import Literal, Optional
 from datetime import datetime
 from bson import ObjectId
 
+
 class MessageRequest(BaseModel):
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True
-    )
     session_id: str
     message: str
-    provider: str
-    model: str
 
 class MessageSchema(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True
     )
+
     session_id: str
-    role: Literal["user", "assistant", "system"]
+    role: Literal[
+        "user",
+        "assistant",
+        "system"
+    ]
     message: str
-    provider: str
-    model: str
     sequence: int
     timestamp: datetime
     inference_log_id: Optional[ObjectId] = None

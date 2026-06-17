@@ -1,145 +1,128 @@
 from datetime import datetime
 from uuid import uuid4
 
-from app.database.mongodb import modes_collection
-from backend.app.schemas.mode_schema import ModeRequest
+from fastapi import HTTPException
+
+from app.database.mongodb import mode_collection
+from app.schemas.mode_schema import ModeRequest
 
 
 async def create_mode(data: ModeRequest):
-    """
-    Create a new mode
-    """
-
-    existing_mode = await modes_collection.find_one(
+    existing_mode = await mode_collection.find_one(
         {"title": data.title}
     )
 
     if existing_mode:
-        return {
-            "success": False,
-            "message": "Mode title already exists"
-        }
+        raise HTTPException(
+            status_code=400,
+            detail="Mode title already exists"
+        )
 
     mode = {
         "mode_id": str(uuid4()),
         "title": data.title,
         "description": data.description,
         "system_prompt": data.system_prompt,
-        "created_at": datetime.utcnow()
+        "updated_at": datetime.utcnow()
     }
 
-    await modes_collection.insert_one(mode)
+    result = await mode_collection.insert_one(mode)
 
-    return {
-        "success": True,
-        "message": "Mode created successfully",
-        "data": mode
-    }
+    mode["_id"] = str(result.inserted_id)
+
+    return mode
 
 
 async def get_modes():
-    """
-    Get all modes
-    """
+    modes = []
 
-    modes = await modes_collection.find(
-        {},
-        {"_id": 0}
-    ).to_list(length=None)
+    async for mode in mode_collection.find().sort(
+        "updated_at",
+        -1
+    ):
+        mode["_id"] = str(mode["_id"])
+        modes.append(mode)
 
-    return {
-        "success": True,
-        "data": modes
-    }
+    return modes
 
 
 async def get_mode(mode_id: str):
-    """
-    Get single mode
-    """
-
-    mode = await modes_collection.find_one(
-        {"mode_id": mode_id},
-        {"_id": 0}
+    mode = await mode_collection.find_one(
+        {"mode_id": mode_id}
     )
 
     if not mode:
-        return {
-            "success": False,
-            "message": "Mode not found"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Mode not found"
+        )
 
-    return {
-        "success": True,
-        "data": mode
-    }
+    mode["_id"] = str(mode["_id"])
+
+    return mode
 
 
 async def delete_mode(mode_id: str):
-    """
-    Delete mode
-    """
-
-    result = await modes_collection.delete_one(
+    result = await mode_collection.delete_one(
         {"mode_id": mode_id}
     )
 
     if result.deleted_count == 0:
-        return {
-            "success": False,
-            "message": "Mode not found"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Mode not found"
+        )
 
     return {
-        "success": True,
         "message": "Mode deleted successfully"
     }
 
 
-async def edit_mode(mode_id: str, data: ModeRequest):
-    """
-    Edit existing mode
-    """
-
-    mode = await modes_collection.find_one(
+async def edit_mode(
+    mode_id: str,
+    data: ModeRequest
+):
+    mode = await mode_collection.find_one(
         {"mode_id": mode_id}
     )
 
     if not mode:
-        return {
-            "success": False,
-            "message": "Mode not found"
-        }
+        raise HTTPException(
+            status_code=404,
+            detail="Mode not found"
+        )
 
-    duplicate = await modes_collection.find_one({
-        "title": data.title,
-        "mode_id": {"$ne": mode_id}
-    })
+    duplicate = await mode_collection.find_one(
+        {
+            "title": data.title,
+            "mode_id": {"$ne": mode_id}
+        }
+    )
 
     if duplicate:
-        return {
-            "success": False,
-            "message": "Mode title already exists"
-        }
+        raise HTTPException(
+            status_code=400,
+            detail="Mode title already exists"
+        )
 
-    await modes_collection.update_one(
+    await mode_collection.update_one(
         {"mode_id": mode_id},
         {
             "$set": {
                 "title": data.title,
                 "description": data.description,
-                "system_prompt": data.system_prompt
+                "system_prompt": data.system_prompt,
+                "updated_at": datetime.utcnow()
             }
         }
     )
 
-    updated_mode = await modes_collection.find_one(
-        {"mode_id": mode_id},
-        {"_id": 0}
+    updated_mode = await mode_collection.find_one(
+        {"mode_id": mode_id}
     )
 
-    return {
-        "success": True,
-        "message": "Mode updated successfully",
-        "data": updated_mode
-    }
+    updated_mode["_id"] = str(
+        updated_mode["_id"]
+    )
+
+    return updated_mode
