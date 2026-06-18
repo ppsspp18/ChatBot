@@ -10,7 +10,9 @@ from app.database.mongodb import (
     message_collection,
 ) 
 
-from app.services.langchain_provider import generate_stream
+#changes : validate mode before adding in conversation
+
+from app.services.langchain_provider import generate_stream, generate
 from app.services.inference_logger import log_inference
 
 from app.crud.crud_conversation import(
@@ -76,8 +78,7 @@ async def generate_title(data):
 
             try:
 
-                generated_title = ""
-                async for chunk in generate_stream(
+                generated_title = await generate(
                     provider="groq",
                     model="openai/gpt-oss-20b",
                     messages=[
@@ -86,9 +87,8 @@ async def generate_title(data):
                         "content": title_prompt
                         }
                     ]
-                ):
-                    generated_title += chunk
-
+                )
+                
                 title_end = time.time()
 
                 title_latency_ms = (title_end - title_start) * 1000
@@ -280,3 +280,30 @@ async def get_messages(session_id: str):
         messages.append(message)
 
     return messages
+
+async def get_message_simple(message : str):
+    content = await generate(
+                    provider="ollama",
+                    model="gemma3:1b",
+                    message=message
+                )
+    return  content
+
+async def get_stream_simple(message : str):
+    async def event_generator():
+        full_response = ""
+        async for content in generate_stream(
+            provider="ollama",
+            model="deepseek-r1:1.5b",
+            messages=[ {
+                     "role":"user",
+                     "content":message
+            }
+            ] 
+            ):  
+                full_response += content
+                yield f"data: {json.dumps({'content': content})}\n\n"
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream"
+    )        

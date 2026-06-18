@@ -46,7 +46,7 @@ class LLMFactory:
         elif provider == "ollama":
             return ChatOllama(
                 model=model,
-                base_url="http://localhost:11434",
+                base_url="http://host.docker.internal:11434",
                 temperature=0.7,
                 keep_alive=0, 
                 request_timeout=300
