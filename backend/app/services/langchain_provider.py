@@ -91,3 +91,32 @@ async def generate_stream(
             yield chunk.content
 
 
+async def generate(
+    provider: str,
+    model: str,
+    message: str,
+    system_prompt: str | None = None
+):
+    llm = LLMFactory.get_llm(
+        provider=provider,
+        model=model
+    )
+
+    lc_messages = []
+
+    if system_prompt:
+        lc_messages.append(
+            SystemMessage(content=system_prompt)
+        )
+
+    lc_messages.append(
+        HumanMessage(content=message)
+    )
+
+    response = await llm.ainvoke(
+        lc_messages
+    )
+
+    return response.content
+
+
