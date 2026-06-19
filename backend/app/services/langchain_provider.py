@@ -85,6 +85,7 @@ async def generate_stream(
                 AIMessage(content=msg["content"])
             )
 
+
     async for chunk in llm.astream(lc_messages):
 
         if chunk.content:

@@ -30,9 +30,7 @@ async def validate_conversation(
         raise ValueError(
             "Conversation is cancelled"
         )
-
     return conversation
-
 
 
 # Create

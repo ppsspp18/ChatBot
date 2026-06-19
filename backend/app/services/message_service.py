@@ -65,14 +65,12 @@ async def get_context_messages(
 
 
 async def generate_title(data):
-            title_prompt = f"""
-                            Generate a short conversation title in two to four words 
-                            based on the following user message. 
-                            User message: {data.message}, 
-                            Only return the title.
-                            Example: if the user message is "How do I reset my password?", 
-                            a good title would be "Password Reset Help".
-                            """
+            title_prompt = f"""Generate a short conversation title in two to four words 
+based on the following user message. 
+User message: {data.message}, 
+Only return the title.
+Example: if the user message is "How do I reset my password?", 
+a good title would be "Password Reset Help". """
 
             title_start = time.time()
 
@@ -81,12 +79,7 @@ async def generate_title(data):
                 generated_title = await generate(
                     provider="groq",
                     model="openai/gpt-oss-20b",
-                    messages=[
-                        {
-                        "role": "user",
-                        "content": title_prompt
-                        }
-                    ]
+                    message=title_prompt
                 )
                 
                 title_end = time.time()
@@ -121,9 +114,9 @@ async def generate_title(data):
                 )
 
                 await update_conversation(
-                    data.session_id, 
-                    generated_title,
-                    title_total_tokens
+                    session_id=data.session_id, 
+                    title=generated_title,
+                    total_tokens=title_total_tokens
                     )
 
             except Exception as exc:
@@ -155,7 +148,9 @@ async def send_message(data):
 
     async def event_generator():
 
-        conversation = await validate_conversation(data.session_id)
+        conversation = await validate_conversation(
+             session_id=data.session_id
+            )
 
         title = conversation["title"]
         provider = conversation["provider"]
@@ -192,7 +187,7 @@ async def send_message(data):
         except Exception as exc:
             llm_status = "error"
             error_message = str(exc)
-            yield f"data: {json.dumps({'error': 'Generation Failed'})}\n\n"
+            yield f"data: {json.dumps({'error': error_message})}\n\n"
 
         end = time.time()
         latency_ms = (end - start) * 1000
@@ -250,9 +245,9 @@ async def send_message(data):
             await message_collection.insert_one(assistant_message)
 
         await update_conversation(
-            data.session_id,
-            title,
-            total_tokens
+            session_id=data.session_id,
+            title=title,
+            total_tokens=total_tokens
             )
 
         if conversation.get("title") == "NEW CONVERSATION":
