@@ -22,10 +22,9 @@ services:
     container_name: frontend
     volumes:
       - ./frontend:/app
-      - /app/node_modules
     ports:
-      - "127.0.0.1:5173:5173"
+      - "8501:8501"
     environment:
-      - VITE_BACKEND_URL=http://localhost:8000
+      - BACKEND_URL=http://backend:8000
     depends_on:
       - backend

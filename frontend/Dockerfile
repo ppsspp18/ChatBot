@@ -1,19 +1,22 @@
-FROM node:22-alpine
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies first so this layer is cached unless package*.json changes
-COPY package*.json ./
-RUN npm install
+# Install dependencies first for better layer caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Source is bind-mounted over this in docker-compose for live editing;
-# this copy just makes the image runnable standalone too.
+# Source is bind-mounted by docker-compose for live editing,
+# this COPY just makes the image runnable standalone too.
 COPY . .
 
-EXPOSE 5173
+EXPOSE 8501
 
-# Re-run npm install at startup if node_modules is missing or incomplete.
-# This guards against the bind mount in docker-compose hiding the
-# node_modules that were installed during the image build (e.g. on a
-# fresh checkout, or after the anonymous volume gets reset).
-CMD sh -c "[ -x node_modules/.bin/vite ] || npm install; npm run dev -- --host 0.0.0.0"
+# runOnSave + polling file watcher => hot reload works reliably
+# even on bind-mounted volumes (same approach as your backend's
+# WATCHFILES_FORCE_POLLING).
+CMD ["streamlit", "run", "app.py", \
+     "--server.port=8501", \
+     "--server.address=0.0.0.0", \
+     "--server.runOnSave=true", \
+     "--server.fileWatcherType=poll"]

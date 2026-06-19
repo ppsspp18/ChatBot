@@ -289,7 +289,7 @@ async def get_stream_simple(message : str):
         full_response = ""
         async for content in generate_stream(
             provider="ollama",
-            model="deepseek-r1:1.5b",
+            model="qwen3:0.6b",
             messages=[ {
                      "role":"user",
                      "content":message
