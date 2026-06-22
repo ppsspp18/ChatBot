@@ -10,8 +10,6 @@ from app.database.mongodb import (
     message_collection,
 ) 
 
-#changes : validate mode before adding in conversation
-
 from app.services.langchain_provider import generate_stream, generate
 from app.services.inference_logger import log_inference
 
@@ -64,10 +62,15 @@ async def get_context_messages(
     return context
 
 
-async def generate_title(data):
+async def generate_title(
+          message : str,
+          session_id : str,
+          provider : str,
+          model : str
+):
             title_prompt = f"""Generate a short conversation title in two to four words 
 based on the following user message. 
-User message: {data.message}, 
+User message: {message}, 
 Only return the title.
 Example: if the user message is "How do I reset my password?", 
 a good title would be "Password Reset Help". """
@@ -77,8 +80,8 @@ a good title would be "Password Reset Help". """
             try:
 
                 generated_title = await generate(
-                    provider="groq",
-                    model="openai/gpt-oss-20b",
+                    provider=provider,
+                    model=model,
                     message=title_prompt
                 )
                 
@@ -99,9 +102,9 @@ a good title would be "Password Reset Help". """
                 )
 
                 await log_inference(
-                    session_id=data.session_id,
-                    provider="groq",
-                    model="openai/gpt-oss-20b",
+                    session_id=session_id,
+                    provider=provider,
+                    model=model,
                     latency_ms=title_latency_ms,
                     ttft_ms=title_ttft_ms,
                     prompt_tokens=title_prompt_tokens,
@@ -114,7 +117,7 @@ a good title would be "Password Reset Help". """
                 )
 
                 await update_conversation(
-                    session_id=data.session_id, 
+                    session_id=session_id, 
                     title=generated_title,
                     total_tokens=title_total_tokens
                     )
@@ -128,9 +131,9 @@ a good title would be "Password Reset Help". """
                 ) * 1000
 
                 await log_inference(
-                    session_id=data.session_id,
-                    provider="groq",
-                    model="openai/gpt-oss-20b",
+                    session_id=session_id,
+                    provider=provider,
+                    model=model,
                     latency_ms=title_latency_ms,
                     ttft_ms=title_latency_ms,
                     prompt_tokens=int(len(title_prompt) * 0.3),
@@ -251,7 +254,12 @@ async def send_message(data):
             )
 
         if conversation.get("title") == "NEW CONVERSATION":
-            await generate_title(data)
+            await generate_title(
+                message = data.message,
+                session_id = data.session_id,
+                provider = provider,
+                model = model
+                )
 
 
         yield f"data: {json.dumps({'done': True, 'latency_ms': round(latency_ms, 2), 'ttft_ms': round(ttft_ms, 2)})}\n\n"

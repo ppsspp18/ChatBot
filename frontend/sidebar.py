@@ -1,6 +1,6 @@
 import streamlit as st
 
-from api_client import create_conversation, get_conversations, get_modes
+from api_client import create_conversation, get_conversations, get_modes, delete_conversation
 from config import PROVIDERS, PROVIDERS_MODELS
 from state import go_to, set_current_session
 
@@ -94,6 +94,59 @@ def _render_conversation_list() -> None:
     for conv in conversations:
         is_active = conv["session_id"] == st.session_state.current_session_id
         label = ("▶ " if is_active else "") + conv["title"]
-        if st.sidebar.button(label, key=f"conv_{conv['session_id']}", use_container_width=True):
-            set_current_session(conv["session_id"])
-            st.rerun()
+
+        col1, col2 = st.sidebar.columns([5, 1])
+
+        with col1:
+            if st.button(
+                label,
+                key=f"conv_{conv['session_id']}",
+                use_container_width=True
+            ):
+                set_current_session(conv["session_id"])
+                st.rerun()
+
+        with col2:
+            if st.button(
+                "🗑️",
+                key=f"delete_{conv['session_id']}"
+            ):
+                st.session_state.confirm_delete = conv["session_id"]
+                st.rerun()
+
+        # Show confirmation dialog if this conversation is pending deletion
+        if st.session_state.get("confirm_delete") == conv["session_id"]:
+            st.sidebar.warning(f"Delete '{conv['title']}'?")
+
+            c1, c2 = st.sidebar.columns(2)
+
+            with c1:
+                if st.button(
+                    "Yes",
+                    key=f"yes_{conv['session_id']}",
+                    use_container_width=True
+                ):
+                    try:
+                        delete_conversation(conv["session_id"])
+                        
+                        # If deleted conversation is selected,
+                        # clear current session
+                        if (
+                            conv["session_id"]
+                            == st.session_state.current_session_id
+                        ):
+                            st.session_state.current_session_id = None
+                        
+                        st.session_state.confirm_delete = None
+                        st.rerun()
+                    except Exception as e:
+                        st.sidebar.error(f"Delete failed: {e}")
+
+            with c2:
+                if st.button(
+                    "No",
+                    key=f"no_{conv['session_id']}",
+                    use_container_width=True
+                ):
+                    st.session_state.confirm_delete = None
+                    st.rerun()

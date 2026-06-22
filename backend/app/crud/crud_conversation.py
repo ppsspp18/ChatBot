@@ -8,6 +8,10 @@ from app.database.mongodb import (
     conversation_collection
 )
 
+from app.crud.crud_mode import (
+    validate_mode
+)
+
 
 # Validation
 async def validate_conversation(
@@ -40,6 +44,9 @@ async def create_conversation_db(
     model: str,
     mode_id: Optional[str] = None
 ):
+    if mode_id:
+        await validate_mode(mode_id)
+
     conversation = {
         "session_id": str(uuid4()),
         "title": title,
