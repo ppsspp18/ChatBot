@@ -10,17 +10,19 @@ from langchain_core.messages import (
 )
 
 from app.config.settings import (
+    APP_ENV,
     GROQ_API_KEY,
     GOOGLE_API_KEY,
     DEEPSEEK_API_KEY,
-    OPENROUTER_API_KEY
+    OPENROUTER_API_KEY,
+    OLLAMA_BASE_URL
 )
 
 
 def extract_text(content):
     """
     Extract text content from various response formats.
-    
+
     Handles:
     - String: returns as-is
     - List of strings: joins them
@@ -53,7 +55,6 @@ def extract_text(content):
 
         return "".join(parts)
 
-    # Fallback for any other type
     return str(content)
 
 
@@ -63,7 +64,7 @@ class LLMFactory:
     def get_llm(provider: str, model: str):
         """
         Factory method to create LLM instances based on provider.
-        
+
         Supported providers:
         - groq
         - google
@@ -71,7 +72,11 @@ class LLMFactory:
         - openrouter
         - ollama
         """
+        provider = provider.lower().strip()
+
         if provider == "groq":
+            if not GROQ_API_KEY:
+                raise ValueError("GROQ_API_KEY is not configured.")
             return ChatGroq(
                 model=model,
                 api_key=GROQ_API_KEY,
@@ -79,6 +84,8 @@ class LLMFactory:
             )
 
         elif provider == "google":
+            if not GOOGLE_API_KEY:
+                raise ValueError("GOOGLE_API_KEY is not configured.")
             return ChatGoogleGenerativeAI(
                 model=model,
                 google_api_key=GOOGLE_API_KEY,
@@ -86,6 +93,8 @@ class LLMFactory:
             )
 
         elif provider == "deepseek":
+            if not DEEPSEEK_API_KEY:
+                raise ValueError("DEEPSEEK_API_KEY is not configured.")
             return ChatOpenAI(
                 model=model,
                 api_key=DEEPSEEK_API_KEY,
@@ -94,6 +103,8 @@ class LLMFactory:
             )
 
         elif provider == "openrouter":
+            if not OPENROUTER_API_KEY:
+                raise ValueError("OPENROUTER_API_KEY is not configured.")
             return ChatOpenAI(
                 model=model,
                 api_key=OPENROUTER_API_KEY,
@@ -102,9 +113,19 @@ class LLMFactory:
             )
 
         elif provider == "ollama":
+            # Keep Ollama support for local usage, but fail cleanly in production
+            if APP_ENV in {"production", "render"}:
+                raise ValueError(
+                    "Ollama is not available in this deployed environment. "
+                    "Please choose Groq, Google, DeepSeek, or OpenRouter."
+                )
+
+            if not OLLAMA_BASE_URL:
+                raise ValueError("OLLAMA_BASE_URL is not configured for local Ollama usage.")
+
             return ChatOllama(
                 model=model,
-                base_url="http://host.docker.internal:11434",
+                base_url=OLLAMA_BASE_URL,
                 temperature=0.7,
                 keep_alive=0,
                 request_timeout=400
@@ -120,12 +141,12 @@ async def generate_stream(
 ):
     """
     Generate a streaming response from the LLM.
-    
+
     Args:
         provider: LLM provider (groq, google, deepseek, openrouter, ollama)
         model: Model name/identifier
         messages: List of message dicts with 'role' and 'content' keys
-    
+
     Yields:
         Text chunks as strings
     """
@@ -134,7 +155,6 @@ async def generate_stream(
         model=model
     )
 
-    # Convert messages to LangChain format
     lc_messages = []
 
     for msg in messages:
@@ -151,7 +171,6 @@ async def generate_stream(
                 AIMessage(content=msg["content"])
             )
 
-    # Stream responses with proper text extraction
     async for chunk in llm.astream(lc_messages):
         text = extract_text(chunk.content)
         if text:
@@ -166,13 +185,13 @@ async def generate(
 ) -> str:
     """
     Generate a complete (non-streaming) response from the LLM.
-    
+
     Args:
         provider: LLM provider (groq, google, deepseek, openrouter, ollama)
         model: Model name/identifier
         message: User message
         system_prompt: Optional system prompt
-    
+
     Returns:
         Complete response as string
     """
@@ -193,6 +212,4 @@ async def generate(
     )
 
     response = await llm.ainvoke(lc_messages)
-    
-    # Extract text from response content
     return extract_text(response.content)

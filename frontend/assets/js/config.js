@@ -1,7 +1,20 @@
-export const BACKEND_URL =
-  window.location.hostname === "localhost"
-    ? "http://localhost:8000"
-    : `${window.location.protocol}//${window.location.hostname}:8000`;
+const PROD_BACKEND_URL = "https://YOUR-RENDER-BACKEND.onrender.com";
+
+function resolveBackendUrl() {
+  const hostname = window.location.hostname;
+
+  const isLocalhost =
+    hostname === "localhost" ||
+    hostname === "127.0.0.1";
+
+  if (isLocalhost) {
+    return "http://localhost:8000";
+  }
+
+  return PROD_BACKEND_URL;
+}
+
+export const BACKEND_URL = resolveBackendUrl();
 
 export const PROVIDERS_MODELS = {
   ollama: [
