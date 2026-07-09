@@ -1,4 +1,4 @@
-const PROD_BACKEND_URL = "https://YOUR-RENDER-BACKEND.onrender.com";
+const PROD_BACKEND_URL = "https://chatbot-j3lf.onrender.com";
 
 function resolveBackendUrl() {
   const hostname = window.location.hostname;
