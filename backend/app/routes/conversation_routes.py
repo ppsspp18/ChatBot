@@ -5,13 +5,12 @@ from app.schemas.conversation_schema import (
     UpdateConversationRequest
 )
 
-from app.services.conversation_service import (
+from app.crud.crud_conversation import (
     create_conversation,
-    edit_conversation,
+    update_conversation,
     get_all_conversations,
     get_conversation,
-    cancel_conversation,
-    activate_conversation,
+    update_conversation_status,
     delete_conversation
 )
 
@@ -25,14 +24,26 @@ router = APIRouter(
 async def create_conversation_route(
     data: CreateConversationRequest
 ):
-    return await create_conversation(data)
+    return await create_conversation(
+        title=data.title,
+        provider=data.provider,
+        model=data.model,
+        mode_id=data.mode_id
+    )
 
 
 @router.patch("/")
 async def edit_conversation_route(
     data: UpdateConversationRequest
 ):
-    return await edit_conversation(data)
+    await update_conversation(
+        session_id=data.session_id,
+        title=data.title,
+        provider=data.provider,
+        model=data.model,
+        mode_id=data.mode_id
+    )
+    return {"message": "Conversation updated successfully"}
 
 
 @router.get("/")
@@ -51,14 +62,20 @@ async def get_conversation_route(
 async def cancel_conversation_route(
     session_id: str
 ):
-    return await cancel_conversation(session_id)
+    return await update_conversation_status(
+        session_id,
+        "cancelled"
+    )
 
 
 @router.patch("/activate/{session_id}")
 async def activate_conversation_route(
     session_id: str
 ):
-    return await activate_conversation(session_id)
+    return await update_conversation_status(
+        session_id,
+        "active"
+    )
 
 
 @router.delete("/{session_id}")

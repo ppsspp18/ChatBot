@@ -1,22 +1,9 @@
-FROM python:3.11-slim
+FROM nginx:1.27-alpine
 
-WORKDIR /app
+COPY index.html /usr/share/nginx/html/index.html
+COPY assets /usr/share/nginx/html/assets
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Install dependencies first for better layer caching
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+EXPOSE 80
 
-# Source is bind-mounted by docker-compose for live editing,
-# this COPY just makes the image runnable standalone too.
-COPY . .
-
-EXPOSE 8501
-
-# runOnSave + polling file watcher => hot reload works reliably
-# even on bind-mounted volumes (same approach as your backend's
-# WATCHFILES_FORCE_POLLING).
-CMD ["streamlit", "run", "app.py", \
-     "--server.port=8501", \
-     "--server.address=0.0.0.0", \
-     "--server.runOnSave=true", \
-     "--server.fileWatcherType=poll"]
+CMD ["nginx", "-g", "daemon off;"]

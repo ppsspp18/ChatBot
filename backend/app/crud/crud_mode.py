@@ -1,5 +1,8 @@
 from datetime import datetime
 from uuid import uuid4
+from typing import List, Dict, Any
+
+from fastapi import HTTPException
 
 from app.database.mongodb import mode_collection
 
@@ -7,50 +10,49 @@ from app.database.mongodb import mode_collection
 # Validation
 async def validate_mode(
     mode_id: str
-):
+) -> Dict[str, Any]:
     mode = await mode_collection.find_one(
         {"mode_id": mode_id}
     )
 
     if not mode:
-        raise ValueError(
-            "Mode not found"
+        raise HTTPException(
+            status_code=404,
+            detail="Mode not found"
         )
 
+    mode["_id"] = str(mode["_id"])
     return mode
 
 
 async def validate_mode_title(
     title: str,
     exclude_mode_id: str = None
-):
-    query = {
-        "title": title
-    }
+) -> bool:
+    query = {"title": title}
 
     if exclude_mode_id:
-        query["mode_id"] = {
-            "$ne": exclude_mode_id
-        }
+        query["mode_id"] = {"$ne": exclude_mode_id}
 
-    mode = await mode_collection.find_one(
-        query
-    )
+    mode = await mode_collection.find_one(query)
 
     if mode:
-        raise ValueError(
-            "Mode title already exists"
+        raise HTTPException(
+            status_code=400,
+            detail="Mode title already exists"
         )
 
     return True
 
 
 # Create
-async def create_mode_db(
+async def create_mode(
     title: str,
     description: str,
     system_prompt: str
-):
+) -> Dict[str, Any]:
+    await validate_mode_title(title)
+
     mode = {
         "mode_id": str(uuid4()),
         "title": title,
@@ -59,27 +61,20 @@ async def create_mode_db(
         "updated_at": datetime.utcnow()
     }
 
-    result = await mode_collection.insert_one(
-        mode
-    )
-
-    mode["_id"] = str(
-        result.inserted_id
-    )
+    result = await mode_collection.insert_one(mode)
+    mode["_id"] = str(result.inserted_id)
 
     return mode
 
 
 # Read
-async def get_mode_by_id(
+async def get_mode(
     mode_id: str
-):
-    return await mode_collection.find_one(
-        {"mode_id": mode_id}
-    )
+) -> Dict[str, Any]:
+    return await validate_mode(mode_id)
 
 
-async def get_all_modes_db():
+async def get_all_modes() -> List[Dict[str, Any]]:
     modes = []
 
     async for mode in (
@@ -87,10 +82,7 @@ async def get_all_modes_db():
         .find()
         .sort("updated_at", -1)
     ):
-        mode["_id"] = str(
-            mode["_id"]
-        )
-
+        mode["_id"] = str(mode["_id"])
         modes.append(mode)
 
     return modes
@@ -102,7 +94,10 @@ async def update_mode(
     title: str,
     description: str,
     system_prompt: str
-):
+) -> Dict[str, Any]:
+    await validate_mode(mode_id)
+    await validate_mode_title(title, exclude_mode_id=mode_id)
+
     await mode_collection.update_one(
         {"mode_id": mode_id},
         {
@@ -118,18 +113,19 @@ async def update_mode(
     updated_mode = await mode_collection.find_one(
         {"mode_id": mode_id}
     )
-
-    updated_mode["_id"] = str(
-        updated_mode["_id"]
-    )
+    updated_mode["_id"] = str(updated_mode["_id"])
 
     return updated_mode
 
 
 # Delete
-async def delete_mode_db(
+async def delete_mode(
     mode_id: str
-):
-    return await mode_collection.delete_one(
+) -> Dict[str, str]:
+    await validate_mode(mode_id)
+
+    await mode_collection.delete_one(
         {"mode_id": mode_id}
     )
+
+    return {"message": "Mode deleted successfully"}

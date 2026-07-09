@@ -1,11 +1,12 @@
 from datetime import datetime
 from uuid import uuid4
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from fastapi import HTTPException
 
 from app.database.mongodb import (
-    conversation_collection
+    conversation_collection,
+    message_collection
 )
 
 from app.crud.crud_mode import (
@@ -17,33 +18,37 @@ from app.crud.crud_mode import (
 async def validate_conversation(
     session_id: str,
     allow_cancelled: bool = False
-):
+) -> Dict[str, Any]:
     conversation = await conversation_collection.find_one(
         {"session_id": session_id}
     )
 
     if not conversation:
-        raise ValueError(
-            "Conversation not found"
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
         )
 
     if (
         not allow_cancelled
         and conversation["status"] == "cancelled"
     ):
-        raise ValueError(
-            "Conversation is cancelled"
+        raise HTTPException(
+            status_code=400,
+            detail="Conversation is cancelled"
         )
+
+    conversation["_id"] = str(conversation["_id"])
     return conversation
 
 
 # Create
-async def create_conversation_db(
+async def create_conversation(
     title: str,
     provider: str,
     model: str,
     mode_id: Optional[str] = None
-):
+) -> Dict[str, Any]:
     if mode_id:
         await validate_mode(mode_id)
 
@@ -63,23 +68,18 @@ async def create_conversation_db(
         conversation
     )
 
-    conversation["_id"] = str(
-        result.inserted_id
-    )
-
+    conversation["_id"] = str(result.inserted_id)
     return conversation
 
 
 # Read
-async def get_conversation_by_session_id(
+async def get_conversation(
     session_id: str
-):
-    return await conversation_collection.find_one(
-        {"session_id": session_id}
-    )
+) -> Dict[str, Any]:
+    return await validate_conversation(session_id)
 
 
-async def get_all_conversations_db():
+async def get_all_conversations() -> List[Dict[str, Any]]:
     conversations = []
 
     async for conversation in (
@@ -87,16 +87,10 @@ async def get_all_conversations_db():
         .find()
         .sort("updated_at", -1)
     ):
-        conversation["_id"] = str(
-            conversation["_id"]
-        )
-
-        conversations.append(
-            conversation
-        )
+        conversation["_id"] = str(conversation["_id"])
+        conversations.append(conversation)
 
     return conversations
-
 
 
 # Update
@@ -108,44 +102,37 @@ async def update_conversation(
     mode_id: Optional[str] = None,
     total_tokens: int = 0
 ):
-    update_data = {
-        "updated_at": datetime.utcnow()
-    }
+    await validate_conversation(session_id, allow_cancelled=True)
+
+    update_data = {"updated_at": datetime.utcnow()}
 
     if title is not None:
         update_data["title"] = title
-
     if provider is not None:
         update_data["provider"] = provider
-
     if model is not None:
         update_data["model"] = model
-
     if mode_id is not None:
         update_data["mode_id"] = mode_id
 
-    update_query = {
-        "$set": update_data
-    }
+    update_query = {"$set": update_data}
 
     if total_tokens:
-        update_query["$inc"] = {
-            "total_tokens": total_tokens
-        }
+        update_query["$inc"] = {"total_tokens": total_tokens}
 
-    result = await conversation_collection.update_one(
+    await conversation_collection.update_one(
         {"session_id": session_id},
         update_query
     )
-
-    return result
 
 
 async def update_conversation_status(
     session_id: str,
     status: str
-):
-    return await conversation_collection.update_one(
+) -> Dict[str, str]:
+    await validate_conversation(session_id, allow_cancelled=True)
+
+    await conversation_collection.update_one(
         {"session_id": session_id},
         {
             "$set": {
@@ -155,17 +142,37 @@ async def update_conversation_status(
         }
     )
 
+    status_label = "cancelled" if status == "cancelled" else "activated"
+    return {
+        "message": f"Conversation {status_label} successfully",
+        "session_id": session_id
+    }
+
 
 # Delete
-async def delete_conversation_db(
+async def delete_conversation(
     session_id: str
-):
-    return await conversation_collection.delete_one(
+) -> Dict[str, str]:
+    await validate_conversation(session_id, allow_cancelled=True)
+
+    result = await conversation_collection.delete_one(
         {"session_id": session_id}
     )
 
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found"
+        )
 
-# Update many 
+    await message_collection.delete_many(
+        {"session_id": session_id}
+    )
+
+    return {"message": "Conversation deleted successfully"}
+
+
+# Update many
 async def remove_mode_from_conversations(
     mode_id: str
 ):

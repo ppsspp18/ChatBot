@@ -2,12 +2,12 @@ from fastapi import APIRouter
 
 from app.schemas.mode_schema import ModeRequest
 
-from app.services.mode_service import (
+from app.crud.crud_mode import (
     create_mode,
-    get_modes,
+    get_all_modes,
     get_mode,
-    delete_mode,
-    edit_mode
+    update_mode,
+    delete_mode
 )
 
 router = APIRouter(
@@ -20,12 +20,16 @@ router = APIRouter(
 async def create_mode_route(
     data: ModeRequest
 ):
-    return await create_mode(data)
+    return await create_mode(
+        title=data.title,
+        description=data.description,
+        system_prompt=data.system_prompt
+    )
 
 
 @router.get("/")
 async def get_modes_route():
-    return await get_modes()
+    return await get_all_modes()
 
 
 @router.get("/{mode_id}")
@@ -40,9 +44,11 @@ async def edit_mode_route(
     mode_id: str,
     data: ModeRequest
 ):
-    return await edit_mode(
-        mode_id,
-        data
+    return await update_mode(
+        mode_id=mode_id,
+        title=data.title,
+        description=data.description,
+        system_prompt=data.system_prompt
     )
 
 
@@ -50,6 +56,4 @@ async def edit_mode_route(
 async def delete_mode_route(
     mode_id: str
 ):
-    return await delete_mode(
-        mode_id
-    )
+    return await delete_mode(mode_id)
