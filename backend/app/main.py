@@ -15,6 +15,7 @@ from app.routes.message_routes import router as messages_router
 from app.routes.mode_routes import router as modes_router
 from app.routes.ingest_routes import router as ingest_router
 from app.routes.metric_routes import router as metrics_router
+from app.routes.quiz_route import router as quiz_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,6 +72,7 @@ app.include_router(messages_router)
 app.include_router(modes_router)
 app.include_router(ingest_router)
 app.include_router(metrics_router)
+app.include_router(quiz_router)
 
 
 @app.get("/", tags=["Health"])
