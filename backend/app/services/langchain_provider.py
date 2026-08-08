@@ -14,23 +14,11 @@ from app.config.settings import (
     GROQ_API_KEY,
     GOOGLE_API_KEY,
     DEEPSEEK_API_KEY,
-    OPENROUTER_API_KEY,
-    OLLAMA_BASE_URL
+    OPENROUTER_API_KEY
 )
 
 
 def extract_text(content):
-    """
-    Extract text content from various response formats.
-
-    Handles:
-    - String: returns as-is
-    - List of strings: joins them
-    - List of dicts: extracts 'text' fields
-    - List of objects: extracts 'text' attributes
-    - None: returns empty string
-    - Other types: converts to string
-    """
     if content is None:
         return ""
 
@@ -62,16 +50,6 @@ class LLMFactory:
 
     @staticmethod
     def get_llm(provider: str, model: str):
-        """
-        Factory method to create LLM instances based on provider.
-
-        Supported providers:
-        - groq
-        - google
-        - deepseek
-        - openrouter
-        - ollama
-        """
         provider = provider.lower().strip()
 
         if provider == "groq":
@@ -112,24 +90,6 @@ class LLMFactory:
                 temperature=0.7
             )
 
-        elif provider == "ollama":
-            # Keep Ollama support for local usage, but fail cleanly in production
-            if APP_ENV in {"production", "render"}:
-                raise ValueError(
-                    "Ollama is not available in this deployed environment. "
-                    "Please choose Groq, Google, DeepSeek, or OpenRouter."
-                )
-
-            if not OLLAMA_BASE_URL:
-                raise ValueError("OLLAMA_BASE_URL is not configured for local Ollama usage.")
-
-            return ChatOllama(
-                model=model,
-                base_url=OLLAMA_BASE_URL,
-                temperature=0.7,
-                keep_alive=0,
-                request_timeout=400
-            )
 
         raise ValueError(f"Invalid provider: {provider}")
 
@@ -139,17 +99,7 @@ async def generate_stream(
     model: str,
     messages: list[dict]
 ):
-    """
-    Generate a streaming response from the LLM.
-
-    Args:
-        provider: LLM provider (groq, google, deepseek, openrouter, ollama)
-        model: Model name/identifier
-        messages: List of message dicts with 'role' and 'content' keys
-
-    Yields:
-        Text chunks as strings
-    """
+    
     llm = LLMFactory.get_llm(
         provider=provider,
         model=model
@@ -183,18 +133,7 @@ async def generate(
     message: str,
     system_prompt: str | None = None
 ) -> str:
-    """
-    Generate a complete (non-streaming) response from the LLM.
-
-    Args:
-        provider: LLM provider (groq, google, deepseek, openrouter, ollama)
-        model: Model name/identifier
-        message: User message
-        system_prompt: Optional system prompt
-
-    Returns:
-        Complete response as string
-    """
+    
     llm = LLMFactory.get_llm(
         provider=provider,
         model=model

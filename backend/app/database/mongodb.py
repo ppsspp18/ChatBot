@@ -12,7 +12,6 @@ db = client[DATABASE_NAME]
 
 conversation_collection = db["conversations"]
 message_collection = db["messages"]
-inference_log_collection = db["inference_logs"]
-event_collection = db["events"]
 mode_collection = db["modes"]
 quiz_collection = db["quizes"]
+user_collection = db["users"]

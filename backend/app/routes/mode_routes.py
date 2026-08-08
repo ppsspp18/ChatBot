@@ -1,59 +1,43 @@
-from fastapi import APIRouter
+from typing import Any
 
+from fastapi import APIRouter, Depends
+
+from app.core.security import get_current_user
 from app.schemas.mode_schema import ModeRequest
-
-from app.crud.crud_mode import (
-    create_mode,
-    get_all_modes,
-    get_mode,
-    update_mode,
-    delete_mode
-)
+from app.services import mode_service
 
 router = APIRouter(
     prefix="/modes",
-    tags=["Modes"]
+    tags=["Modes"],
 )
 
 
 @router.post("/")
 async def create_mode_route(
-    data: ModeRequest
+    data: ModeRequest,
+    current_user: Any = Depends(get_current_user),
 ):
-    return await create_mode(
-        title=data.title,
-        description=data.description,
-        system_prompt=data.system_prompt
-    )
+    return await mode_service.create_mode(data, current_user["user_id"])
 
 
 @router.get("/")
-async def get_modes_route():
-    return await get_all_modes()
+async def get_modes_route(
+    current_user: Any = Depends(get_current_user),
+):
+    return await mode_service.get_modes(current_user["user_id"])
 
 
 @router.get("/{mode_id}")
 async def get_mode_route(
-    mode_id: str
-):
-    return await get_mode(mode_id)
-
-
-@router.patch("/{mode_id}")
-async def edit_mode_route(
     mode_id: str,
-    data: ModeRequest
+    current_user: Any = Depends(get_current_user),
 ):
-    return await update_mode(
-        mode_id=mode_id,
-        title=data.title,
-        description=data.description,
-        system_prompt=data.system_prompt
-    )
+    return await mode_service.get_mode(mode_id, current_user["user_id"])
 
 
 @router.delete("/{mode_id}")
 async def delete_mode_route(
-    mode_id: str
+    mode_id: str,
+    current_user: Any = Depends(get_current_user),
 ):
-    return await delete_mode(mode_id)
+    return await mode_service.delete_mode(mode_id, current_user["user_id"])

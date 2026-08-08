@@ -16,8 +16,12 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = os.getenv("DATABASE_NAME")
 
-# Optional local Ollama config
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+# JWT Authentication
+SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24)
+)
 
 # CORS
 # Comma-separated list in env, e.g.

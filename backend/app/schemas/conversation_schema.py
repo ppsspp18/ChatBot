@@ -1,6 +1,7 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Optional
+
+from pydantic import BaseModel
 
 
 class CreateConversationRequest(BaseModel):
@@ -11,20 +12,17 @@ class CreateConversationRequest(BaseModel):
 
 
 class UpdateConversationRequest(BaseModel):
-    session_id: str
-    title: Optional[str] = None
-    provider: Optional[str] = None
-    model: Optional[str] = None
-    mode_id: Optional[str] = None
+    conversation_id: str
+    title: str
 
 
 class ConversationSchema(BaseModel):
-    session_id: str
+    conversation_id: str
+    user_id: str
     title: str
     provider: str
     model: str
     mode_id: Optional[str] = None
-    status: Literal["active", "cancelled", "done"]
     total_tokens: int
     created_at: datetime
     updated_at: datetime

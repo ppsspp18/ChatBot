@@ -4,8 +4,9 @@ from pymongo import ASCENDING, DESCENDING, IndexModel
 from app.database.mongodb import (
     conversation_collection,
     message_collection,
-    inference_log_collection,
-    event_collection,
+    mode_collection,
+    quiz_collection,
+    user_collection,
 )
 
 logger = logging.getLogger(__name__)
@@ -17,16 +18,30 @@ async def create_indexes() -> None:
     Safe to call on every application startup.
     """
 
+    # ── users ─────────────────────────────────────────────────────
+    await user_collection.create_indexes([
+        IndexModel(
+            [("user_id", ASCENDING)],
+            unique=True,
+            name="user_id_unique"
+        ),
+        IndexModel(
+            [("username", ASCENDING)],
+            unique=True,
+            name="username_unique"
+        ),
+    ])
+
     # ── conversations ──────────────────────────────────────────────
     await conversation_collection.create_indexes([
         IndexModel(
-            [("session_id", ASCENDING)],
+            [("conversation_id", ASCENDING)],
             unique=True,
-            name="session_id_unique"
+            name="conversation_id_unique"
         ),
         IndexModel(
-            [("status", ASCENDING)],
-            name="status"
+            [("user_id", ASCENDING)],
+            name="user_id"
         ),
         IndexModel(
             [("provider", ASCENDING)],
@@ -49,95 +64,60 @@ async def create_indexes() -> None:
             name="updated_at_desc"
         ),
 
-        # Common dashboard query:
-        # active conversations for a provider
+        # Common query: all conversations belonging to one user
         IndexModel(
-            [("provider", ASCENDING), ("status", ASCENDING)],
-            name="provider_status"
+            [("user_id", ASCENDING), ("updated_at", DESCENDING)],
+            name="user_id_updated_at"
         ),
     ])
 
     # ── messages ──────────────────────────────────────────────────
     await message_collection.create_indexes([
         IndexModel(
-            [("session_id", ASCENDING)],
-            name="session_id"
+            [("conversation_id", ASCENDING)],
+            name="conversation_id"
         ),
 
         # Retrieve conversation history in order
         IndexModel(
-            [("session_id", ASCENDING), ("sequence", ASCENDING)],
+            [("conversation_id", ASCENDING), ("sequence", ASCENDING)],
             unique=True,
-            name="session_sequence_unique"
-        ),
-
-        IndexModel(
-            [("role", ASCENDING)],
-            name="role"
-        ),
-
-        IndexModel(
-            [("timestamp", DESCENDING)],
-            name="timestamp_desc"
-        ),
-
-        IndexModel(
-            [("inference_log_id", ASCENDING)],
-            name="inference_log_id"
+            name="conversation_sequence_unique"
         ),
     ])
 
-    # ── inference_logs ────────────────────────────────────────────
-    await inference_log_collection.create_indexes([
+    # ── modes ─────────────────────────────────────────────────────
+    await mode_collection.create_indexes([
         IndexModel(
-            [("log_id", ASCENDING)],
+            [("mode_id", ASCENDING)],
             unique=True,
-            name="log_id_unique"
+            name="mode_id_unique"
         ),
         IndexModel(
-            [("session_id", ASCENDING)],
-            name="session_id"
+            [("user_id", ASCENDING)],
+            name="user_id"
         ),
         IndexModel(
-            [("provider", ASCENDING)],
-            name="provider"
-        ),
-        IndexModel(
-            [("status", ASCENDING)],
-            name="status"
-        ),
-        IndexModel(
-            [("provider", ASCENDING), ("created_at", DESCENDING)],
-            name="provider_created_at"
-        ),
-        IndexModel(
-            [("created_at", DESCENDING)],
-            name="created_at_desc"
+            [("user_id", ASCENDING), ("mode_id", ASCENDING)],
+            unique=True,
+            name="user_mode_unique"
         ),
     ])
 
-    # ── events ────────────────────────────────────────────────────
-    await event_collection.create_indexes([
+    # ── quizzes ───────────────────────────────────────────────────
+    await quiz_collection.create_indexes([
         IndexModel(
-            [("event_id", ASCENDING)],
+            [("quiz_id", ASCENDING)],
             unique=True,
-            name="event_id_unique"
+            name="quiz_id_unique"
         ),
         IndexModel(
-            [("event_type", ASCENDING)],
-            name="event_type"
+            [("user_id", ASCENDING)],
+            name="user_id"
         ),
         IndexModel(
-            [("processed", ASCENDING)],
-            name="processed"
-        ),
-        IndexModel(
-            [("session_id", ASCENDING)],
-            name="session_id"
-        ),
-        IndexModel(
-            [("created_at", DESCENDING)],
-            name="created_at_desc"
+            [("user_id", ASCENDING), ("created_at", DESCENDING)],
+            name="user_created_at"
         ),
     ])
 

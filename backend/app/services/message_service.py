@@ -1,32 +1,25 @@
-import time
 import json
+import time
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
+from fastapi import HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from app.database.mongodb import message_collection
-from app.services.langchain_provider import generate_stream, generate
-from app.services.inference_logger import log_inference
-from app.crud.crud_conversation import (
-    validate_conversation,
-    update_conversation,
-)
-from app.crud.crud_mode import validate_mode
-from app.crud.crud_message import (
-    insert_message,
-    get_messages_by_session_id
-)
+from app.database.mongodb import message_collection, mode_collection
+from app.schemas.message_schema import MessageRequest
+from app.services.conversation_service import _require_conversation
+from app.services.langchain_provider import generate, generate_stream
 
 
 async def get_context_messages(
-    session_id: str,
+    conversation_id: str,
     user_message: str,
     mode_id: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     messages = (
         await message_collection
-        .find({"session_id": session_id})
+        .find({"conversation_id": conversation_id})
         .sort("sequence", -1)
         .limit(10)
         .to_list(length=10)
@@ -42,105 +35,99 @@ async def get_context_messages(
     context.append({"role": "user", "content": user_message})
 
     if mode_id:
-        mode = await validate_mode(mode_id)
-        context.insert(0, {
-            "role": "system",
-            "content": mode["system_prompt"]
-        })
+        mode = await mode_collection.find_one({"mode_id": mode_id})
+        if mode and mode.get("system_prompt"):
+            context.insert(0, {
+                "role": "system",
+                "content": mode["system_prompt"],
+            })
 
     return context
 
 
 async def generate_title(
     message: str,
-    session_id: str,
+    conversation_id: str,
+    user_id: str,
     provider: str,
-    model: str
+    model: str,
 ):
-    title_prompt = f"""Generate a short conversation title in two to four words 
-based on the following user message. 
-User message: {message}, 
+    title_prompt = f"""Generate a short conversation title in two to four words
+based on the following user message.
+User message: {message},
 Only return the title.
-Example: if the user message is "How do I reset my password?", 
+Example: if the user message is "How do I reset my password?",
 a good title would be "Password Reset Help". """
-
-    title_start = time.time()
 
     try:
         generated_title = await generate(
             provider=provider,
             model=model,
-            message=title_prompt
+            message=title_prompt,
         )
 
-        title_end = time.time()
-        title_latency_ms = (title_end - title_start) * 1000
-        generated_title = generated_title.strip().replace('"', '')
+        generated_title = generated_title.strip().replace('"', "")
 
         if not generated_title:
             generated_title = "NEW CONVERSATION"
 
-        title_prompt_tokens = int(len(title_prompt) * 0.3)
-        title_completion_tokens = int(len(generated_title) * 0.3)
-        title_total_tokens = title_prompt_tokens + title_completion_tokens
-
-        await log_inference(
-            session_id=session_id,
-            provider=provider,
-            model=model,
-            latency_ms=title_latency_ms,
-            ttft_ms=title_latency_ms,
-            prompt_tokens=title_prompt_tokens,
-            completion_tokens=title_completion_tokens,
-            status="success",
-            pii_detected=False,
-            entities=[],
-            input_preview=title_prompt,
-            output_preview=generated_title
-        )
-
-        await update_conversation(
-            session_id=session_id,
+        await _update_conversation_title(
+            conversation_id=conversation_id,
+            user_id=user_id,
             title=generated_title,
-            total_tokens=title_total_tokens
         )
 
-    except Exception as exc:
-        title_end = time.time()
-        title_latency_ms = (title_end - title_start) * 1000
-
-        await log_inference(
-            session_id=session_id,
-            provider=provider,
-            model=model,
-            latency_ms=title_latency_ms,
-            ttft_ms=title_latency_ms,
-            prompt_tokens=int(len(title_prompt) * 0.3),
-            completion_tokens=0,
-            status="error",
-            pii_detected=False,
-            entities=[],
-            input_preview=title_prompt,
-            output_preview=str(exc)
-        )
+    except Exception:
+        pass
 
 
-async def send_message(data):
+async def _update_conversation_title(
+    conversation_id: str,
+    user_id: str,
+    title: str,
+) -> None:
+    from app.database.mongodb import conversation_collection
+
+    await conversation_collection.update_one(
+        {"conversation_id": conversation_id, "user_id": user_id},
+        {
+            "$set": {
+                "title": title,
+                "updated_at": datetime.utcnow(),
+            }
+        },
+    )
+
+
+async def insert_message(
+    conversation_id: str,
+    role: str,
+    message: str,
+    sequence: int,
+) -> None:
+    document = {
+        "conversation_id": conversation_id,
+        "role": role,
+        "message": message,
+        "sequence": sequence,
+        "timestamp": datetime.utcnow(),
+    }
+
+    await message_collection.insert_one(document)
+
+
+async def send_message(data: MessageRequest, user_id: str) -> StreamingResponse:
+    conversation = await _require_conversation(data.conversation_id, user_id)
 
     async def event_generator():
-        conversation = await validate_conversation(
-            session_id=data.session_id
-        )
-
-        title = conversation["title"]
         provider = conversation["provider"]
         model = conversation["model"]
-        mode_id = conversation["mode_id"]
+        mode_id = conversation.get("mode_id")
 
         context_messages = await get_context_messages(
-            session_id=data.session_id,
+            conversation_id=data.conversation_id,
             user_message=data.message,
-            mode_id=mode_id
+            mode_id=mode_id,
         )
 
         start = time.time()
@@ -170,37 +157,16 @@ async def send_message(data):
 
         end = time.time()
         latency_ms = (end - start) * 1000
-        prompt_text = json.dumps(context_messages)
-        prompt_tokens = int(len(prompt_text) * 0.3)
-        completion_tokens = int(len(full_response) * 0.3)
-        total_tokens = prompt_tokens + completion_tokens
 
         sequence = await message_collection.count_documents(
-            {"session_id": data.session_id}
+            {"conversation_id": data.conversation_id}
         )
 
         await insert_message(
-            session_id=data.session_id,
+            conversation_id=data.conversation_id,
             role="user",
             message=data.message,
-            provider=provider,
-            model=model,
-            sequence=sequence + 1
-        )
-
-        inference_result = await log_inference(
-            session_id=data.session_id,
-            provider=provider,
-            model=model,
-            latency_ms=latency_ms,
-            ttft_ms=ttft_ms,
-            prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
-            status=llm_status,
-            pii_detected=False,
-            entities=[],
-            input_preview=data.message,
-            output_preview=full_response
+            sequence=sequence + 1,
         )
 
         if llm_status == "success" and full_response.strip():
@@ -209,36 +175,49 @@ async def send_message(data):
             assistant_message = f"Error generating response: {error_message}"
 
         await insert_message(
-            session_id=data.session_id,
+            conversation_id=data.conversation_id,
             role="assistant",
             message=assistant_message,
-            provider=provider,
-            model=model,
             sequence=sequence + 2,
-            inference_log_id=inference_result["log_id"]
         )
 
-        await update_conversation(
-            session_id=data.session_id,
-            title=title,
-            total_tokens=total_tokens
+        await _update_conversation_title(
+            conversation_id=data.conversation_id,
+            user_id=user_id,
+            title=conversation["title"],
         )
 
         if conversation.get("title") == "NEW CONVERSATION":
             await generate_title(
                 message=data.message,
-                session_id=data.session_id,
-                provider=provider,
-                model=model
+                conversation_id=data.conversation_id,
+                user_id=user_id
             )
 
-        yield f"data: {json.dumps({'done': True, 'latency_ms': round(latency_ms, 2), 'ttft_ms': round(ttft_ms, 2)})}\n\n"
+        yield (
+            f"data: {json.dumps({'done': True, 'latency_ms': round(latency_ms, 2), 'ttft_ms': round(ttft_ms, 2)})}\n\n"
+        )
 
     return StreamingResponse(
         event_generator(),
-        media_type="text/event-stream"
+        media_type="text/event-stream",
     )
 
 
-async def get_messages(session_id: str) -> List[Dict[str, Any]]:
-    return await get_messages_by_session_id(session_id)
+async def get_messages(
+    conversation_id: str,
+    user_id: str,
+) -> List[Dict[str, Any]]:
+    await _require_conversation(conversation_id, user_id)
+
+    messages = (
+        await message_collection
+        .find({"conversation_id": conversation_id})
+        .sort("sequence", 1)
+        .to_list(length=None)
+    )
+
+    for msg in messages:
+        msg["_id"] = str(msg["_id"])
+
+    return messages

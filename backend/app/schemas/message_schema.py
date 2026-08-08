@@ -1,19 +1,21 @@
-from pydantic import BaseModel, ConfigDict
-from typing import Literal, Optional
 from datetime import datetime
+from typing import Literal, Optional
+
 from bson import ObjectId
+from pydantic import BaseModel, ConfigDict
 
 
 class MessageRequest(BaseModel):
-    session_id: str
+    conversation_id: str
     message: str
+
 
 class MessageSchema(BaseModel):
     model_config = ConfigDict(
         arbitrary_types_allowed=True
     )
 
-    session_id: str
+    conversation_id: str
     role: Literal[
         "user",
         "assistant",
@@ -22,4 +24,3 @@ class MessageSchema(BaseModel):
     message: str
     sequence: int
     timestamp: datetime
-    inference_log_id: Optional[ObjectId] = None

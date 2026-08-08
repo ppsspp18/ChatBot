@@ -6,15 +6,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import CORS_ORIGINS
-from app.ingestion.event_bus import event_bus
-from app.ingestion.worker import worker_loop
 from app.database.indexes import create_indexes
 
+from app.routes.auth_routes import router as auth_router
 from app.routes.conversation_routes import router as conversations_router
 from app.routes.message_routes import router as messages_router
 from app.routes.mode_routes import router as modes_router
-from app.routes.ingest_routes import router as ingest_router
-from app.routes.metric_routes import router as metrics_router
 from app.routes.quiz_route import router as quiz_router
 
 logging.basicConfig(
@@ -28,32 +25,21 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Starting up...")
 
-    event_bus.init()
-
     try:
         await create_indexes()
     except Exception as exc:
         logger.warning("Index creation failed (non-fatal): %s", exc)
 
-    worker_task = asyncio.create_task(worker_loop(), name="ingestion-worker")
-    logger.info("Ingestion worker started")
 
     yield
 
     logger.info("Shutting down...")
-    worker_task.cancel()
-    try:
-        await worker_task
-    except asyncio.CancelledError:
-        pass
-    logger.info("Ingestion worker stopped")
 
 
 app = FastAPI(
-    title="LLM Inference Logger API",
+    title="LLM ChatBot API",
     description=(
         "Chatbot backend with multi-provider LLM support (Groq + Google AI Studio), "
-        "inference logging, ingestion pipeline, and metrics aggregation."
     ),
     version="1.0.0",
     lifespan=lifespan,
@@ -67,11 +53,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(conversations_router)
 app.include_router(messages_router)
 app.include_router(modes_router)
-app.include_router(ingest_router)
-app.include_router(metrics_router)
 app.include_router(quiz_router)
 
 
@@ -80,6 +65,5 @@ app.include_router(quiz_router)
 async def health():
     return {
         "status": "running",
-        "service": "llm-inference-logger",
-        "ingestion_queue_size": event_bus.size,
+        "service": "AI ChatBot",
     }

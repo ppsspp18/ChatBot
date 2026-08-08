@@ -1,85 +1,61 @@
-from fastapi import APIRouter
+from typing import Any
 
+from fastapi import APIRouter, Depends
+
+from app.core.security import get_current_user
 from app.schemas.conversation_schema import (
     CreateConversationRequest,
-    UpdateConversationRequest
+    UpdateConversationRequest,
 )
-
-from app.crud.crud_conversation import (
-    create_conversation,
-    update_conversation,
-    get_all_conversations,
-    get_conversation,
-    update_conversation_status,
-    delete_conversation
-)
+from app.services import conversation_service
 
 router = APIRouter(
     prefix="/conversations",
-    tags=["Conversations"]
+    tags=["Conversations"],
 )
 
 
 @router.post("/")
 async def create_conversation_route(
-    data: CreateConversationRequest
+    data: CreateConversationRequest,
+    current_user: Any = Depends(get_current_user),
 ):
-    return await create_conversation(
-        title=data.title,
-        provider=data.provider,
-        model=data.model,
-        mode_id=data.mode_id
+    return await conversation_service.create_conversation(
+        data, current_user["user_id"]
     )
 
 
 @router.patch("/")
 async def edit_conversation_route(
-    data: UpdateConversationRequest
+    data: UpdateConversationRequest,
+    current_user: Any = Depends(get_current_user),
 ):
-    await update_conversation(
-        session_id=data.session_id,
-        title=data.title,
-        provider=data.provider,
-        model=data.model,
-        mode_id=data.mode_id
+    return await conversation_service.update_conversation(
+        data, current_user["user_id"]
     )
-    return {"message": "Conversation updated successfully"}
 
 
 @router.get("/")
-async def get_conversations_route():
-    return await get_all_conversations()
+async def get_conversations_route(
+    current_user: Any = Depends(get_current_user),
+):
+    return await conversation_service.get_conversations(current_user["user_id"])
 
 
-@router.get("/{session_id}")
+@router.get("/{conversation_id}")
 async def get_conversation_route(
-    session_id: str
+    conversation_id: str,
+    current_user: Any = Depends(get_current_user),
 ):
-    return await get_conversation(session_id)
-
-
-@router.patch("/cancel/{session_id}")
-async def cancel_conversation_route(
-    session_id: str
-):
-    return await update_conversation_status(
-        session_id,
-        "cancelled"
+    return await conversation_service.get_conversation(
+        conversation_id, current_user["user_id"]
     )
 
-
-@router.patch("/activate/{session_id}")
-async def activate_conversation_route(
-    session_id: str
-):
-    return await update_conversation_status(
-        session_id,
-        "active"
-    )
-
-
-@router.delete("/{session_id}")
+@router.delete("/{conversation_id}")
 async def delete_conversation_route(
-    session_id: str
+    conversation_id: str,
+    current_user: Any = Depends(get_current_user),
 ):
-    return await delete_conversation(session_id)
+    return await conversation_service.delete_conversation(
+        conversation_id, current_user["user_id"]
+    )
