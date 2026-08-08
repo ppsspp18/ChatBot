@@ -97,7 +97,7 @@ export function showToast(message, type = "info") {
 }
 
 export function renderConversations(conversations, selectedConversationId, callbacks = {}) {
-  const { onSelect, onActivate, onCancel, onDelete } = callbacks;
+  const { onSelect, onRename, onDelete } = callbacks;
 
   if (!elements.conversationList) return;
 
@@ -112,17 +112,18 @@ export function renderConversations(conversations, selectedConversationId, callb
 
   elements.conversationList.innerHTML = conversations
     .map((conversation) => {
-      const sessionId = conversation.session_id || "";
+      const conversationId =
+        conversation.conversation_id || conversation.session_id || "";
       const title = escapeHtml(conversation.title || "Untitled Conversation");
       const provider = escapeHtml(conversation.provider || "—");
       const model = escapeHtml(conversation.model || "—");
       const status = normalizeConversationStatus(conversation);
       const activeClass =
-        sessionId === selectedConversationId ? "active" : "";
+        conversationId === selectedConversationId ? "active" : "";
       const isCancelled = status === "cancelled";
 
       return `
-        <div class="conversation-item ${activeClass}" data-session-id="${escapeHtml(sessionId)}">
+        <div class="conversation-item ${activeClass}" data-conversation-id="${escapeHtml(conversationId)}">
           <div class="conversation-top">
             <div class="conversation-title" data-role="select">${title}</div>
           </div>
@@ -139,11 +140,7 @@ export function renderConversations(conversations, selectedConversationId, callb
           </div>
 
           <div class="conversation-item-actions">
-            ${
-              isCancelled
-                ? `<button type="button" class="icon-btn" data-action="activate">Activate</button>`
-                : `<button type="button" class="icon-btn" data-action="cancel">Cancel</button>`
-            }
+            <button type="button" class="icon-btn" data-action="rename">Rename</button>
             <button type="button" class="icon-btn danger" data-action="delete">Delete</button>
           </div>
         </div>
@@ -152,27 +149,19 @@ export function renderConversations(conversations, selectedConversationId, callb
     .join("");
 
   elements.conversationList.querySelectorAll(".conversation-item").forEach((item) => {
-    const sessionId = item.dataset.sessionId;
+    const conversationId = item.dataset.conversationId;
 
     item.querySelectorAll('[data-role="select"]').forEach((node) => {
       node.addEventListener("click", () => {
-        if (sessionId && onSelect) onSelect(sessionId);
+        if (conversationId && onSelect) onSelect(conversationId);
       });
     });
 
-    const activateBtn = item.querySelector('[data-action="activate"]');
-    if (activateBtn) {
-      activateBtn.addEventListener("click", (event) => {
+    const renameBtn = item.querySelector('[data-action="rename"]');
+    if (renameBtn) {
+      renameBtn.addEventListener("click", (event) => {
         event.stopPropagation();
-        if (sessionId && onActivate) onActivate(sessionId);
-      });
-    }
-
-    const cancelBtn = item.querySelector('[data-action="cancel"]');
-    if (cancelBtn) {
-      cancelBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        if (sessionId && onCancel) onCancel(sessionId);
+        if (conversationId && onRename) onRename(conversationId);
       });
     }
 
@@ -180,14 +169,14 @@ export function renderConversations(conversations, selectedConversationId, callb
     if (deleteBtn) {
       deleteBtn.addEventListener("click", (event) => {
         event.stopPropagation();
-        if (sessionId && onDelete) onDelete(sessionId);
+        if (conversationId && onDelete) onDelete(conversationId);
       });
     }
   });
 }
 
 export function renderModeManagementList(modes, callbacks = {}) {
-  const { onEdit, onDelete } = callbacks;
+  const { onDelete } = callbacks;
 
   if (!elements.modeManagementList) return;
 
@@ -209,7 +198,6 @@ export function renderModeManagementList(modes, callbacks = {}) {
           </div>
           <div class="conversation-meta">${truncate(description, 70)}</div>
           <div class="conversation-item-actions">
-            <button type="button" class="icon-btn" data-action="edit">Edit</button>
             <button type="button" class="icon-btn danger" data-action="delete">Delete</button>
           </div>
         </div>
@@ -219,14 +207,6 @@ export function renderModeManagementList(modes, callbacks = {}) {
 
   elements.modeManagementList.querySelectorAll(".conversation-item").forEach((item) => {
     const modeId = item.dataset.modeId;
-
-    const editBtn = item.querySelector('[data-action="edit"]');
-    if (editBtn) {
-      editBtn.addEventListener("click", () => {
-        const mode = modes.find((m) => (m.mode_id || m.id) === modeId);
-        if (mode && onEdit) onEdit(mode);
-      });
-    }
 
     const deleteBtn = item.querySelector('[data-action="delete"]');
     if (deleteBtn) {
@@ -279,8 +259,8 @@ export function renderSelectedConversation(conversation) {
 
   elements.selectedConversationDetails.innerHTML = `
     <div class="detail-row">
-      <div class="detail-label">Session ID</div>
-      <div class="detail-value">${escapeHtml(conversation.session_id || "—")}</div>
+      <div class="detail-label">Conversation ID</div>
+      <div class="detail-value">${escapeHtml(conversation.conversation_id || conversation.session_id || "—")}</div>
     </div>
     <div class="detail-row">
       <div class="detail-label">Title</div>

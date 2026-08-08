@@ -1,17 +1,18 @@
 import { PROVIDERS, PROVIDERS_MODELS } from "./config.js";
 import {
+  registerUser,
+  loginUser,
+  fetchCurrentUser,
   fetchConversations,
   fetchConversation,
   createConversation,
+  updateConversation,
   fetchMessages,
   fetchModes,
   createMode,
-  updateMode,
   deleteMode,
   streamMessage,
   deleteConversation,
-  activateConversation,
-  cancelConversation,
   checkBackendHealth
 } from "./api.js";
 import {
@@ -22,6 +23,13 @@ import {
   setMessages,
   setStreaming
 } from "./state.js";
+import {
+  isAuthenticated,
+  getUser,
+  setUser,
+  setToken,
+  logout
+} from "./auth.js";
 import {
   getElements,
   renderConversations,
@@ -39,6 +47,17 @@ import {
 
 const DEFAULT_CONVERSATION_TITLE = "NEW CONVERSATION";
 
+// ── Screen management ────────────────────────────────────────────────
+
+function showScreen(screenId) {
+  document.querySelectorAll(".screen").forEach((screen) => {
+    screen.classList.add("hidden");
+  });
+  document.getElementById(screenId).classList.remove("hidden");
+}
+
+// ── DOM references ───────────────────────────────────────────────────
+
 const el = getElements();
 
 const conversationForm = document.getElementById("conversationForm");
@@ -51,11 +70,38 @@ const messageForm = document.getElementById("messageForm");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 
+// Auth Elements
+const authScreen = document.getElementById("authScreen");
+const homeScreen = document.getElementById("homeScreen");
+const showLoginTab = document.getElementById("showLoginTab");
+const showRegisterTab = document.getElementById("showRegisterTab");
+const loginForm = document.getElementById("loginForm");
+const registerForm = document.getElementById("registerForm");
+const loginBtn = document.getElementById("loginBtn");
+const registerBtn = document.getElementById("registerBtn");
+const authError = document.getElementById("authError");
+const homeUsername = document.getElementById("homeUsername");
+const logoutBtn = document.getElementById("logoutBtn");
+const chatLogoutBtn = document.getElementById("chatLogoutBtn");
+const backToHomeBtn = document.getElementById("backToHomeBtn");
+const goToChatCard = document.getElementById("goToChatCard");
+
 // Modal Elements
 const openModesModalBtn = document.getElementById("openModesModalBtn");
 const closeModesModalBtn = document.getElementById("closeModesModalBtn");
 const modesModal = document.getElementById("modesModal");
 const modesModalOverlay = document.getElementById("modesModalOverlay");
+
+const openNewConversationBtn = document.getElementById("openNewConversationBtn");
+const closeNewConversationModalBtn = document.getElementById("closeNewConversationModalBtn");
+const newConversationModal = document.getElementById("newConversationModal");
+const newConversationModalOverlay = document.getElementById("newConversationModalOverlay");
+
+// Sidebar (mobile drawer) Elements
+const sidebar = document.getElementById("sidebar");
+const sidebarOverlay = document.getElementById("sidebarOverlay");
+const openSidebarBtn = document.getElementById("openSidebarBtn");
+const closeSidebarBtn = document.getElementById("closeSidebarBtn");
 
 const modeForm = document.getElementById("modeForm");
 const modeEditingId = document.getElementById("modeEditingId");
@@ -123,7 +169,6 @@ function populateModeSelect(modes) {
 
 function renderModesManagementUI() {
   renderModeManagementList(state.modes, {
-    onEdit: handleEditModeClick,
     onDelete: handleDeleteMode
   });
 }
@@ -151,7 +196,7 @@ async function loadConversations({ preserveSelection = true } = {}) {
     let nextSelectedId = preserveSelection ? state.selectedConversationId : null;
 
     if (nextSelectedId) {
-      const stillExists = normalized.some((c) => c.session_id === nextSelectedId);
+      const stillExists = normalized.some((c) => c.conversation_id === nextSelectedId);
       if (!stillExists) {
         nextSelectedId = null;
       }
@@ -159,8 +204,7 @@ async function loadConversations({ preserveSelection = true } = {}) {
 
     renderConversations(normalized, nextSelectedId, {
       onSelect: handleSelectConversation,
-      onActivate: handleActivateConversation,
-      onCancel: handleCancelConversation,
+      onRename: handleRenameConversation,
       onDelete: handleDeleteConversation
     });
   } catch (error) {
@@ -169,22 +213,21 @@ async function loadConversations({ preserveSelection = true } = {}) {
   }
 }
 
-async function loadConversationDetails(sessionId) {
-  const conversation = await fetchConversation(sessionId);
+async function loadConversationDetails(conversationId) {
+  const conversation = await fetchConversation(conversationId);
   setSelectedConversation(conversation);
   renderSelectedConversation(conversation);
   renderConversations(state.conversations, state.selectedConversationId, {
     onSelect: handleSelectConversation,
-    onActivate: handleActivateConversation,
-    onCancel: handleCancelConversation,
+    onRename: handleRenameConversation,
     onDelete: handleDeleteConversation
   });
   return conversation;
 }
 
-async function loadMessagesForConversation(sessionId) {
+async function loadMessagesForConversation(conversationId) {
   try {
-    const messages = await fetchMessages(sessionId);
+    const messages = await fetchMessages(conversationId);
     const normalized = normalizeMessages(messages);
     setMessages(normalized);
     renderMessages(normalized);
@@ -194,16 +237,16 @@ async function loadMessagesForConversation(sessionId) {
   }
 }
 
-async function handleSelectConversation(sessionId) {
-  if (!sessionId) return;
-  if (sessionId === state.selectedConversationId) {
+async function handleSelectConversation(conversationId) {
+  if (!conversationId) return;
+  if (conversationId === state.selectedConversationId) {
     messageInput.focus();
     return;
   }
 
   try {
-    await loadConversationDetails(sessionId);
-    await loadMessagesForConversation(sessionId);
+    await loadConversationDetails(conversationId);
+    await loadMessagesForConversation(conversationId);
     messageInput.focus();
   } catch (error) {
     console.error(error);
@@ -235,13 +278,15 @@ async function handleCreateConversation(event) {
 
   try {
     const created = await createConversation(payload);
+    closeNewConversationModal();
     showToast("Conversation created.", "success");
 
     await loadConversations({ preserveSelection: false });
 
-    const newSessionId = created?.session_id || created?.data?.session_id || null;
-    if (newSessionId) {
-      await handleSelectConversation(newSessionId);
+    const newConversationId =
+      created?.conversation_id || created?.session_id || null;
+    if (newConversationId) {
+      await handleSelectConversation(newConversationId);
     }
   } catch (error) {
     console.error(error);
@@ -253,9 +298,9 @@ async function handleSendMessage(event) {
   event.preventDefault();
 
   const message = messageInput.value.trim();
-  const sessionId = state.selectedConversationId;
+  const conversationId = state.selectedConversationId;
 
-  if (!sessionId) {
+  if (!conversationId) {
     showToast("Please select or create a conversation first.", "error");
     return;
   }
@@ -286,7 +331,7 @@ async function handleSendMessage(event) {
   try {
     await streamMessage(
       {
-        session_id: sessionId,
+        conversation_id: conversationId,
         message
       },
       {
@@ -315,11 +360,9 @@ async function handleSendMessage(event) {
     );
 
     // Re-sync from the server instead of trusting local optimistic state.
-    // This is what fixes messages not loading/staying consistent: the
-    // backend is always the source of truth for history and sequence order.
     await loadConversations();
-    await loadConversationDetails(sessionId);
-    await loadMessagesForConversation(sessionId);
+    await loadConversationDetails(conversationId);
+    await loadMessagesForConversation(conversationId);
     messageInput.focus();
   } catch (error) {
     console.error(error);
@@ -333,8 +376,43 @@ async function handleSendMessage(event) {
   }
 }
 
-async function handleDeleteConversation(sessionId) {
-  const targetId = sessionId || state.selectedConversationId;
+async function handleRenameConversation(conversationId) {
+  const targetId = conversationId || state.selectedConversationId;
+  if (!targetId) return;
+
+  const current = state.conversations.find(
+    (c) => c.conversation_id === targetId
+  );
+  const currentTitle = current?.title || "Untitled Conversation";
+
+  const newTitle = window.prompt("Enter a new name for this conversation:", currentTitle);
+  if (newTitle === null) return; // cancelled
+
+  const trimmed = newTitle.trim();
+  if (!trimmed) {
+    showToast("Conversation name cannot be empty.", "error");
+    return;
+  }
+  if (trimmed === currentTitle) return;
+
+  try {
+    await updateConversation({
+      conversation_id: targetId,
+      title: trimmed
+    });
+    showToast("Conversation renamed.", "success");
+    await loadConversations();
+    if (targetId === state.selectedConversationId) {
+      await loadConversationDetails(targetId);
+    }
+  } catch (error) {
+    console.error(error);
+    showToast(`Failed to rename conversation: ${error.message}`, "error");
+  }
+}
+
+async function handleDeleteConversation(conversationId) {
+  const targetId = conversationId || state.selectedConversationId;
   if (!targetId) return;
 
   const confirmed = window.confirm(
@@ -360,48 +438,164 @@ async function handleDeleteConversation(sessionId) {
   }
 }
 
-async function handleActivateConversation(sessionId) {
-  const targetId = sessionId || state.selectedConversationId;
-  if (!targetId) return;
+// ── Auth ─────────────────────────────────────────────────────────────
 
+function setAuthError(message) {
+  if (!message) {
+    authError.classList.add("hidden");
+    authError.textContent = "";
+    return;
+  }
+  authError.textContent = message;
+  authError.classList.remove("hidden");
+}
+
+function setAuthBusy(isBusy, button) {
+  if (!button) return;
+  if (!button.dataset.label) {
+    button.dataset.label = button.textContent.trim();
+  }
+  button.disabled = isBusy;
+  button.textContent = isBusy ? "Please wait..." : button.dataset.label;
+}
+
+function switchAuthTab(tab) {
+  const isLogin = tab === "login";
+  showLoginTab.classList.toggle("active", isLogin);
+  showRegisterTab.classList.toggle("active", !isLogin);
+  loginForm.classList.toggle("hidden", !isLogin);
+  registerForm.classList.toggle("hidden", isLogin);
+  setAuthError(null);
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  setAuthError("");
+
+  const username = document.getElementById("loginUsername").value.trim();
+  const password = document.getElementById("loginPassword").value;
+
+  if (!username || !password) {
+    setAuthError("Please enter your username and password.");
+    return;
+  }
+
+  setAuthBusy(true, loginBtn);
   try {
-    await activateConversation(targetId);
-    showToast("Conversation activated.", "success");
-    await loadConversations();
-    if (targetId === state.selectedConversationId) {
-      await loadConversationDetails(targetId);
-    }
+    const data = await loginUser({ username, password });
+    setToken(data.access_token);
+    const user = await fetchCurrentUser();
+    setUser(user);
+    enterApp();
   } catch (error) {
     console.error(error);
-    showToast(`Failed to activate conversation: ${error.message}`, "error");
+    setAuthError(error.message || "Login failed. Please try again.");
+  } finally {
+    setAuthBusy(false, loginBtn);
   }
 }
 
-async function handleCancelConversation(sessionId) {
-  const targetId = sessionId || state.selectedConversationId;
-  if (!targetId) return;
+async function handleRegister(event) {
+  event.preventDefault();
 
+  const username = document.getElementById("registerUsername").value.trim();
+  const password = document.getElementById("registerPassword").value;
+  const confirmPassword = document.getElementById("registerConfirmPassword").value;
+
+  if (!username || !password) {
+    setAuthError("Please enter a username and password.");
+    return;
+  }
+  if (password.length < 6) {
+    setAuthError("Password must be at least 6 characters long.");
+    return;
+  }
+  if (password !== confirmPassword) {
+    setAuthError("Passwords do not match.");
+    return;
+  }
+
+  setAuthBusy(true, registerBtn);
   try {
-    await cancelConversation(targetId);
-    showToast("Conversation cancelled.", "success");
-    await loadConversations();
-    if (targetId === state.selectedConversationId) {
-      await loadConversationDetails(targetId);
-    }
+    await registerUser({ username, password });
+    // Auto-login after successful registration.
+    const data = await loginUser({ username, password });
+    setToken(data.access_token);
+    const user = await fetchCurrentUser();
+    setUser(user);
+    enterApp();
   } catch (error) {
     console.error(error);
-    showToast(`Failed to cancel conversation: ${error.message}`, "error");
+    setAuthError(error.message || "Registration failed. Please try again.");
+  } finally {
+    setAuthBusy(false, registerBtn);
   }
 }
 
-// Modal Toggle Logic
+function handleLogout() {
+  logout();
+  setSelectedConversation(null);
+  setMessages([]);
+  showScreen("authScreen");
+}
+
+function enterApp() {
+  const user = getUser();
+  homeUsername.textContent = user?.username || "there";
+  showScreen("homeScreen");
+}
+
+function enterChat() {
+  // Render empty defaults FIRST to prevent them from wiping out async responses
+  renderSelectedConversation(null);
+  renderMessages([]);
+
+  showScreen("chatScreen");
+
+  loadModes();
+  loadConversations();
+  checkStatus();
+}
+
+function goToHome() {
+  setSelectedConversation(null);
+  setMessages([]);
+  enterApp();
+}
+
+// ── Modes Modal ──────────────────────────────────────────────────────
+
 function openModesModal() {
   modesModal.classList.remove("hidden");
 }
 
 function closeModesModal() {
   modesModal.classList.add("hidden");
-  resetModeForm(); // Clean form automatically when hiding
+  resetModeForm();
+}
+
+// ── New Conversation Modal ─────────────────────────────────────────
+
+function openNewConversationModal() {
+  newConversationModal.classList.remove("hidden");
+  closeSidebar();
+  setTimeout(() => providerSelect.focus(), 50);
+}
+
+function closeNewConversationModal() {
+  newConversationModal.classList.add("hidden");
+}
+
+// ── Sidebar (mobile drawer) ────────────────────────────────────────
+
+function openSidebar() {
+  sidebar.classList.add("open");
+  sidebarOverlay.classList.remove("hidden");
+}
+
+function closeSidebar() {
+  sidebar.classList.remove("open");
+  sidebarOverlay.classList.add("hidden");
 }
 
 function resetModeForm() {
@@ -411,16 +605,6 @@ function resetModeForm() {
   modeSystemPromptInput.value = "";
   modeSubmitBtn.textContent = "Create Mode";
   modeCancelEditBtn.classList.add("hidden");
-}
-
-function handleEditModeClick(mode) {
-  modeEditingId.value = mode.mode_id || mode.id || "";
-  modeTitleInput.value = mode.title || "";
-  modeDescriptionInput.value = mode.description || "";
-  modeSystemPromptInput.value = mode.system_prompt || "";
-  modeSubmitBtn.textContent = "Update Mode";
-  modeCancelEditBtn.classList.remove("hidden");
-  modeTitleInput.focus();
 }
 
 async function handleModeFormSubmit(event) {
@@ -441,17 +625,9 @@ async function handleModeFormSubmit(event) {
     system_prompt: systemPrompt
   };
 
-  const editingId = modeEditingId.value;
-
   try {
-    if (editingId) {
-      await updateMode(editingId, payload);
-      showToast("Mode updated.", "success");
-    } else {
-      await createMode(payload);
-      showToast("Mode created.", "success");
-    }
-
+    await createMode(payload);
+    showToast("Mode created.", "success");
     resetModeForm();
     await loadModes();
   } catch (error) {
@@ -481,10 +657,14 @@ async function handleDeleteMode(modeId) {
   }
 }
 
+// ── Status ───────────────────────────────────────────────────────────
+
 async function checkStatus() {
   const online = await checkBackendHealth();
   setBackendStatus(online);
 }
+
+// ── Event binding ────────────────────────────────────────────────────
 
 function bindEvents() {
   providerSelect.addEventListener("change", (event) => {
@@ -493,16 +673,41 @@ function bindEvents() {
 
   conversationForm.addEventListener("submit", handleCreateConversation);
   messageForm.addEventListener("submit", handleSendMessage);
-  
+
+  // Auth
+  showLoginTab.addEventListener("click", () => switchAuthTab("login"));
+  showRegisterTab.addEventListener("click", () => switchAuthTab("register"));
+  loginForm.addEventListener("submit", handleLogin);
+  registerForm.addEventListener("submit", handleRegister);
+  logoutBtn.addEventListener("click", handleLogout);
+  chatLogoutBtn.addEventListener("click", handleLogout);
+  backToHomeBtn.addEventListener("click", goToHome);
+
+  goToChatCard.addEventListener("click", (event) => {
+    event.preventDefault();
+    enterChat();
+  });
+
   // Modal Buttons
   openModesModalBtn.addEventListener("click", openModesModal);
   closeModesModalBtn.addEventListener("click", closeModesModal);
   modesModalOverlay.addEventListener("click", closeModesModal);
 
+  // New Conversation Modal
+  openNewConversationBtn.addEventListener("click", openNewConversationModal);
+  closeNewConversationModalBtn.addEventListener("click", closeNewConversationModal);
+  newConversationModalOverlay.addEventListener("click", closeNewConversationModal);
+
+  // Sidebar (mobile drawer)
+  openSidebarBtn.addEventListener("click", openSidebar);
+  closeSidebarBtn.addEventListener("click", closeSidebar);
+  sidebarOverlay.addEventListener("click", closeSidebar);
+
   modeForm.addEventListener("submit", handleModeFormSubmit);
   modeCancelEditBtn.addEventListener("click", resetModeForm);
 
   refreshConversationsBtn.addEventListener("click", async () => {
+    if (!isAuthenticated()) return;
     await loadConversations();
     await loadModes();
     await checkStatus();
@@ -519,18 +724,21 @@ function bindEvents() {
   });
 }
 
-async function init() {
+function init() {
   populateProviderSelect();
   bindEvents();
-  
-  // Render empty defaults FIRST to prevent them from wiping out async responses
+
+  // ensure default empty states for chat screen
   renderSelectedConversation(null);
   renderMessages([]);
-  
-  // Initialize Real Data sequentially
-  await loadModes();
-  await loadConversations();
-  await checkStatus();
+
+  if (!isAuthenticated()) {
+    showScreen("authScreen");
+    switchAuthTab("login");
+    return;
+  }
+
+  enterApp();
 }
 
 init();

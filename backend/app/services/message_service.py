@@ -50,7 +50,7 @@ async def generate_title(
     conversation_id: str,
     user_id: str,
     provider: str,
-    model: str,
+    model: str
 ):
     title_prompt = f"""Generate a short conversation title in two to four words
 based on the following user message.
@@ -61,9 +61,9 @@ a good title would be "Password Reset Help". """
 
     try:
         generated_title = await generate(
-            provider=provider,
-            model=model,
             message=title_prompt,
+            provider=provider,
+            model = model
         )
 
         generated_title = generated_title.strip().replace('"', "")
@@ -191,7 +191,9 @@ async def send_message(data: MessageRequest, user_id: str) -> StreamingResponse:
             await generate_title(
                 message=data.message,
                 conversation_id=data.conversation_id,
-                user_id=user_id
+                user_id=user_id,
+                provider=provider,
+                model=model
             )
 
         yield (

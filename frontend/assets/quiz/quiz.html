@@ -6,69 +6,94 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>LLM Quiz Generator - Quiz Mode</title>
+  <title>Quizzes - ChatBot</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="top-nav">
-    <a href="quiz.html" class="back-btn-top" onclick="event.preventDefault(); location.reload();">🔄 Reset / New Quiz</a>
-  </div>
+  <header class="q-header">
+    <div class="q-header-left">
+      <a href="../.." class="q-btn q-btn-ghost" id="backHomeBtn">← Home</a>
+    </div>
+    <div class="q-header-right">
+      <button id="logoutBtn" class="q-btn q-btn-ghost" type="button">Logout</button>
+    </div>
+  </header>
 
-  <div class="container">
-    <div class="card">
-      <h1>LLM Quiz Generator</h1>
-      
-      <div class="topic-concept-grid">
-        <div class="input-group-aesthetic">
-          <label for="topic"><span>📚</span> Topic *</label>
-           <div class="input-with-icon">
-             <span class="input-icon">🔍</span>
-             <input id="topic" placeholder="e.g. Python">
-           </div>
-         </div>
- 
-         <div class="input-group-aesthetic">
-           <label for="concept"><span>💡</span> Concept *</label>
-           <div class="input-with-icon">
-             <span class="input-icon">🎯</span>
-             <input id="concept" placeholder="e.g. Decorators">
-           </div>
-         </div>
+  <main class="q-container">
+    <!-- ── List of quizzes ─────────────────────────────────────────── -->
+    <section id="listView" class="q-view">
+      <div class="q-list-header">
+        <div>
+          <h1>Your Quizzes</h1>
+          <p id="quizCount" class="q-muted"></p>
+        </div>
+        <button class="q-btn q-btn-primary" id="newQuizBtn" type="button">+ New Quiz</button>
       </div>
-      
-      <label for="difficulty">Difficulty *</label>
-      <select id="difficulty">
-        <option value="Easy">Easy</option>
-        <option value="Medium" selected>Medium</option>
-        <option value="Hard">Hard</option>
-      </select>
-      
-      <label for="numQuestions">Number of Questions (1-100) *</label>
-      <input type="number" id="numQuestions" value="5" min="1" max="100">
-      
-      <label for="additionalDescription">Additional Description (optional)</label>
-      <textarea id="additionalDescription" placeholder="Focus on practical use cases, exclusions, style preferences..."></textarea>
-      
-      <div style="margin-top: 20px;">
-        <button id="generateQuizBtn">⚡ Generate Quiz with AI</button>
+      <div id="quizList" class="q-list"></div>
+    </section>
+
+    <!-- ── Taking a quiz ───────────────────────────────────────────── -->
+    <section id="detailView" class="q-view hidden">
+      <div class="q-detail-top">
+        <button class="q-btn q-btn-ghost" id="backToListBtn" type="button">← All Quizzes</button>
+      </div>
+      <div id="quizDetail"></div>
+    </section>
+  </main>
+
+  <!-- ── New quiz modal (simple) ──────────────────────────────────── -->
+  <div id="newQuizModal" class="q-modal hidden">
+    <div class="q-modal-overlay" id="newQuizOverlay"></div>
+    <div class="q-modal-card">
+      <h2>New Quiz</h2>
+
+      <div class="q-form-group">
+        <label for="topicInput">Topic *</label>
+        <input id="topicInput" type="text" placeholder="e.g. Python" />
+      </div>
+
+      <div class="q-form-group">
+        <label for="conceptInput">Concept *</label>
+        <input id="conceptInput" type="text" placeholder="e.g. Decorators" />
+      </div>
+
+      <div class="q-form-row">
+        <div class="q-form-group">
+          <label for="difficultyInput">Difficulty *</label>
+          <select id="difficultyInput">
+            <option value="Easy">Easy</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="Hard">Hard</option>
+          </select>
+        </div>
+        <div class="q-form-group">
+          <label for="numQuestionsInput">Questions (1-10) *</label>
+          <input id="numQuestionsInput" type="number" min="1" max="10" value="5" />
+        </div>
+      </div>
+
+      <div class="q-form-group">
+        <label for="additionalInput">Additional Description (optional)</label>
+        <textarea id="additionalInput" rows="3" placeholder="Any extra focus for the quiz..."></textarea>
+      </div>
+
+      <p id="quizFormError" class="q-error hidden"></p>
+
+      <div class="q-modal-actions">
+        <button class="q-btn q-btn-ghost" id="cancelNewQuizBtn" type="button">Cancel</button>
+        <button class="q-btn q-btn-primary" id="generateQuizBtn" type="button">Generate Quiz</button>
       </div>
     </div>
-
-    <div class="card" id="savedQuizzesCard">
-      <h2>📂 Load Old Quiz</h2>
-      <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-        <select id="savedQuizzesSelect" style="flex: 1; min-width: 250px;">
-          <option value="">-- Select a previously generated quiz --</option>
-        </select>
-        <button id="loadSavedQuizBtn" style="min-width: 120px;">Load Quiz</button>
-      </div>
-    </div>
-
-    <div id="quiz"></div>
-    <div id="submitArea"></div>
-    <div id="result"></div>
   </div>
 
-  <script src="quiz.js"></script>
+  <!-- ── Loading overlay ───────────────────────────────────────────── -->
+  <div id="loadingOverlay" class="q-loading-overlay hidden">
+    <div class="q-loading-card">
+      <div class="q-spinner"></div>
+      <p>Generating quiz… this can take a few seconds</p>
+    </div>
+  </div>
+
+  <script type="module" src="quiz.js"></script>
 </body>
 </html>

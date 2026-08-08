@@ -28,7 +28,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(
 # CORS_ORIGINS=https://your-app.vercel.app,http://localhost:8501
 raw_cors_origins = os.getenv(
     "CORS_ORIGINS",
-    "http://localhost:8501,http://127.0.0.1:8501,http://localhost:3000,http://127.0.0.1:3000"
 )
 
 CORS_ORIGINS = [

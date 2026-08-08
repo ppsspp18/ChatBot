@@ -1,9 +1,17 @@
 import { BACKEND_URL } from "./config.js";
+import { getToken } from "./auth.js";
 
 function buildHeaders() {
-  return {
+  const headers = {
     "Content-Type": "application/json"
   };
+
+  const token = getToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  return headers;
 }
 
 async function handleJsonResponse(response) {
@@ -21,6 +29,11 @@ async function handleJsonResponse(response) {
     } catch (_) {
       // ignore parse failure
     }
+
+    if (response.status === 401) {
+      errorText = `${errorText} (Unauthorized — please log in again.)`;
+    }
+
     throw new Error(errorText);
   }
 
@@ -31,16 +44,48 @@ async function handleJsonResponse(response) {
   return response.text();
 }
 
-export async function fetchConversations() {
-  const res = await fetch(`${BACKEND_URL}/conversations/`, {
-    method: "GET"
+// ── Auth ───────────────────────────────────────────────────────────
+
+export async function registerUser(payload) {
+  const res = await fetch(`${BACKEND_URL}/auth/register`, {
+    method: "POST",
+    headers: buildHeaders(),
+    body: JSON.stringify(payload)
   });
   return handleJsonResponse(res);
 }
 
-export async function fetchConversation(sessionId) {
-  const res = await fetch(`${BACKEND_URL}/conversations/${sessionId}`, {
-    method: "GET"
+export async function loginUser(payload) {
+  const res = await fetch(`${BACKEND_URL}/auth/login`, {
+    method: "POST",
+    headers: buildHeaders(),
+    body: JSON.stringify(payload)
+  });
+  return handleJsonResponse(res);
+}
+
+export async function fetchCurrentUser() {
+  const res = await fetch(`${BACKEND_URL}/auth/me`, {
+    method: "GET",
+    headers: buildHeaders()
+  });
+  return handleJsonResponse(res);
+}
+
+// ── Conversations ──────────────────────────────────────────────────
+
+export async function fetchConversations() {
+  const res = await fetch(`${BACKEND_URL}/conversations/`, {
+    method: "GET",
+    headers: buildHeaders()
+  });
+  return handleJsonResponse(res);
+}
+
+export async function fetchConversation(conversationId) {
+  const res = await fetch(`${BACKEND_URL}/conversations/${conversationId}`, {
+    method: "GET",
+    headers: buildHeaders()
   });
   return handleJsonResponse(res);
 }
@@ -63,62 +108,20 @@ export async function updateConversation(payload) {
   return handleJsonResponse(res);
 }
 
-export async function cancelConversation(sessionId) {
-  const res = await fetch(`${BACKEND_URL}/conversations/cancel/${sessionId}`, {
-    method: "PATCH"
+export async function deleteConversation(conversationId) {
+  const res = await fetch(`${BACKEND_URL}/conversations/${conversationId}`, {
+    method: "DELETE",
+    headers: buildHeaders()
   });
   return handleJsonResponse(res);
 }
 
-export async function activateConversation(sessionId) {
-  const res = await fetch(`${BACKEND_URL}/conversations/activate/${sessionId}`, {
-    method: "PATCH"
-  });
-  return handleJsonResponse(res);
-}
+// ── Messages ───────────────────────────────────────────────────────
 
-export async function deleteConversation(sessionId) {
-  const res = await fetch(`${BACKEND_URL}/conversations/${sessionId}`, {
-    method: "DELETE"
-  });
-  return handleJsonResponse(res);
-}
-
-export async function fetchMessages(sessionId) {
-  const res = await fetch(`${BACKEND_URL}/messages/${sessionId}`, {
-    method: "GET"
-  });
-  return handleJsonResponse(res);
-}
-
-export async function fetchModes() {
-  const res = await fetch(`${BACKEND_URL}/modes/`, {
-    method: "GET"
-  });
-  return handleJsonResponse(res);
-}
-
-export async function createMode(payload) {
-  const res = await fetch(`${BACKEND_URL}/modes/`, {
-    method: "POST",
-    headers: buildHeaders(),
-    body: JSON.stringify(payload)
-  });
-  return handleJsonResponse(res);
-}
-
-export async function updateMode(modeId, payload) {
-  const res = await fetch(`${BACKEND_URL}/modes/${modeId}`, {
-    method: "PATCH",
-    headers: buildHeaders(),
-    body: JSON.stringify(payload)
-  });
-  return handleJsonResponse(res);
-}
-
-export async function deleteMode(modeId) {
-  const res = await fetch(`${BACKEND_URL}/modes/${modeId}`, {
-    method: "DELETE"
+export async function fetchMessages(conversationId) {
+  const res = await fetch(`${BACKEND_URL}/messages/${conversationId}`, {
+    method: "GET",
+    headers: buildHeaders()
   });
   return handleJsonResponse(res);
 }
@@ -127,7 +130,7 @@ export async function deleteMode(modeId) {
  * Stream assistant response from POST /messages/
  * Expected SSE-ish response chunks:
  * data: {"content":"..."}
- * data: {"done":true}
+ * data: {"done":true,...}
  */
 export async function streamMessage(payload, handlers = {}) {
   const { onChunk, onDone, onError } = handlers;
@@ -201,10 +204,59 @@ export async function streamMessage(payload, handlers = {}) {
   }
 }
 
+// ── Modes ──────────────────────────────────────────────────────────
+
+export async function fetchModes() {
+  const res = await fetch(`${BACKEND_URL}/modes/`, {
+    method: "GET",
+    headers: buildHeaders()
+  });
+  return handleJsonResponse(res);
+}
+
+export async function createMode(payload) {
+  const res = await fetch(`${BACKEND_URL}/modes/`, {
+    method: "POST",
+    headers: buildHeaders(),
+    body: JSON.stringify(payload)
+  });
+  return handleJsonResponse(res);
+}
+
+export async function deleteMode(modeId) {
+  const res = await fetch(`${BACKEND_URL}/modes/${modeId}`, {
+    method: "DELETE",
+    headers: buildHeaders()
+  });
+  return handleJsonResponse(res);
+}
+
+// ── Quiz ───────────────────────────────────────────────────────────
+
+export async function createQuiz(payload) {
+  const res = await fetch(`${BACKEND_URL}/quiz/`, {
+    method: "POST",
+    headers: buildHeaders(),
+    body: JSON.stringify(payload)
+  });
+  return handleJsonResponse(res);
+}
+
+export async function fetchQuizzes() {
+  const res = await fetch(`${BACKEND_URL}/quiz/`, {
+    method: "GET",
+    headers: buildHeaders()
+  });
+  return handleJsonResponse(res);
+}
+
+// ── Health ─────────────────────────────────────────────────────────
+
 export async function checkBackendHealth() {
   try {
     const res = await fetch(`${BACKEND_URL}/conversations/`, {
-      method: "GET"
+      method: "GET",
+      headers: buildHeaders()
     });
 
     return res.ok;

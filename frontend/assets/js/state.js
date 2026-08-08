@@ -17,7 +17,8 @@ export function setModes(modes) {
 
 export function setSelectedConversation(conversation) {
   state.selectedConversation = conversation || null;
-  state.selectedConversationId = conversation?.session_id || null;
+  state.selectedConversationId =
+    conversation?.conversation_id || conversation?.session_id || null;
 }
 
 export function setMessages(messages) {
