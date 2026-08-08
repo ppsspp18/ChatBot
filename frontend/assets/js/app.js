@@ -40,9 +40,7 @@ import {
   createStreamingAssistantMessage,
   updateStreamingAssistantMessage,
   finalizeStreamingAssistantMessage,
-  showToast,
-  setBackendStatus,
-  setStreamingStatus
+  showToast
 } from "./ui.js";
 
 const DEFAULT_CONVERSATION_TITLE = "NEW CONVERSATION";
@@ -123,12 +121,19 @@ function setLoadingSendState(isLoading) {
   sendBtn.disabled = isLoading;
   messageInput.disabled = isLoading;
   setStreaming(isLoading);
-  setStreamingStatus(isLoading);
 }
 
 function autoResizeTextarea() {
   messageInput.style.height = "auto";
   messageInput.style.height = `${Math.min(messageInput.scrollHeight, 220)}px`;
+}
+
+function getRandomProviderModel() {
+  const providers = Object.keys(PROVIDERS_MODELS);
+  const provider = providers[Math.floor(Math.random() * providers.length)];
+  const models = PROVIDERS_MODELS[provider] || [];
+  const model = models[Math.floor(Math.random() * models.length)] || "";
+  return { provider, model };
 }
 
 function populateProviderSelect() {
@@ -247,6 +252,7 @@ async function handleSelectConversation(conversationId) {
   try {
     await loadConversationDetails(conversationId);
     await loadMessagesForConversation(conversationId);
+    closeSidebar();
     messageInput.focus();
   } catch (error) {
     console.error(error);
@@ -298,37 +304,53 @@ async function handleSendMessage(event) {
   event.preventDefault();
 
   const message = messageInput.value.trim();
-  const conversationId = state.selectedConversationId;
-
-  if (!conversationId) {
-    showToast("Please select or create a conversation first.", "error");
-    return;
-  }
-
-  if (!message) {
-    return;
-  }
+  if (!message) return;
 
   if (state.isStreaming) {
     showToast("Please wait for the current response to finish.", "info");
     return;
   }
 
-  // Optimistically add user message
-  appendMessage("user", message);
-  state.messages.push({
-    role: "user",
-    message
-  });
-
-  messageInput.value = "";
-  autoResizeTextarea();
   setLoadingSendState(true);
 
-  const assistantBubble = createStreamingAssistantMessage();
+  let assistantBubble = null;
   let fullAssistantText = "";
 
   try {
+    let conversationId = state.selectedConversationId;
+
+    if (!conversationId) {
+      const { provider, model } = getRandomProviderModel();
+      if (!provider || !model) {
+        throw new Error("No models configured. Please check the backend.");
+      }
+
+      const created = await createConversation({
+        title: DEFAULT_CONVERSATION_TITLE,
+        provider,
+        model
+      });
+      conversationId = created?.conversation_id || created?.session_id || null;
+      if (!conversationId) {
+        throw new Error("Failed to create a new conversation.");
+      }
+
+      setSelectedConversation(created);
+      await loadConversations({ preserveSelection: false });
+    }
+
+    // Optimistically add user message
+    appendMessage("user", message);
+    state.messages.push({
+      role: "user",
+      message
+    });
+
+    messageInput.value = "";
+    autoResizeTextarea();
+
+    assistantBubble = createStreamingAssistantMessage();
+
     await streamMessage(
       {
         conversation_id: conversationId,
@@ -366,10 +388,12 @@ async function handleSendMessage(event) {
     messageInput.focus();
   } catch (error) {
     console.error(error);
-    finalizeStreamingAssistantMessage(
-      assistantBubble,
-      `Error: ${error.message}`
-    );
+    if (assistantBubble) {
+      finalizeStreamingAssistantMessage(
+        assistantBubble,
+        `Error: ${error.message}`
+      );
+    }
     showToast(`Failed to send message: ${error.message}`, "error");
   } finally {
     setLoadingSendState(false);
@@ -554,7 +578,6 @@ function enterChat() {
 
   loadModes();
   loadConversations();
-  checkStatus();
 }
 
 function goToHome() {
@@ -567,6 +590,7 @@ function goToHome() {
 
 function openModesModal() {
   modesModal.classList.remove("hidden");
+  closeSidebar();
 }
 
 function closeModesModal() {
@@ -657,11 +681,20 @@ async function handleDeleteMode(modeId) {
   }
 }
 
-// ── Status ───────────────────────────────────────────────────────────
+// ── Boot / Backend wake-up ─────────────────────────────────────────
 
-async function checkStatus() {
-  const online = await checkBackendHealth();
-  setBackendStatus(online);
+async function waitForBackend() {
+  const bootLoading = document.getElementById("bootLoading");
+  bootLoading.classList.remove("hidden");
+
+  while (true) {
+    // Treat 401/404/etc. as "awake"; only a network failure means sleeping.
+    const ready = await checkBackendHealth();
+    if (ready) break;
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+
+  bootLoading.classList.add("hidden");
 }
 
 // ── Event binding ────────────────────────────────────────────────────
@@ -710,7 +743,6 @@ function bindEvents() {
     if (!isAuthenticated()) return;
     await loadConversations();
     await loadModes();
-    await checkStatus();
     showToast("Refreshed conversations.", "info");
   });
 
@@ -724,13 +756,17 @@ function bindEvents() {
   });
 }
 
-function init() {
+async function init() {
   populateProviderSelect();
   bindEvents();
 
   // ensure default empty states for chat screen
   renderSelectedConversation(null);
   renderMessages([]);
+
+  // Render free tier servers sleep after inactivity. Block the UI with a
+  // "please wait" loading screen until the backend wakes back up.
+  await waitForBackend();
 
   if (!isAuthenticated()) {
     showScreen("authScreen");

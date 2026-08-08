@@ -12,6 +12,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 </head>
 <body>
+  <!-- ── Boot / Backend waking screen ─────────────────────────────── -->
+  <div id="bootLoading" class="boot-loading">
+    <div class="boot-loading-content">
+      <div class="boot-spinner"></div>
+      <p class="boot-title">Please wait, we are getting ready...</p>
+      <p class="boot-sub">Our server is waking up from sleep. This can take up to a minute.</p>
+    </div>
+  </div>
+
   <!-- ── Authentication Screen ───────────────────────────────────── -->
   <div id="authScreen" class="screen auth-screen">
     <div class="auth-card">
@@ -104,34 +113,33 @@
           + New Conversation
         </button>
 
+        <button id="openModesModalBtn" class="btn btn-secondary sidebar-new-btn">
+          + New Mode
+        </button>
+
         <div class="sidebar-section">
           <div class="section-title">Conversations</div>
           <div id="conversationList" class="conversation-list"></div>
         </div>
 
         <div class="sidebar-section">
-          <div class="sidebar-section-header">
-            <span class="section-title">Modes</span>
-            <button id="openModesModalBtn" class="btn btn-secondary btn-sm">+ New</button>
-          </div>
+          <div class="section-title">Modes</div>
           <div id="modeManagementList" class="conversation-list"></div>
         </div>
       </aside>
 
       <main class="main-panel">
         <header class="topbar">
-          <div class="topbar-left">
+          <div class="topbar-top">
             <button id="openSidebarBtn" class="icon-btn hamburger-btn" aria-label="Open menu" title="Menu">☰</button>
-            <div>
-              <h2 id="chatTitle" class="chat-title">Select or create a conversation</h2>
-              <p id="chatMeta" class="chat-meta">No conversation selected</p>
+            <div class="topbar-actions">
+              <button id="refreshConversationsBtn" class="btn btn-secondary btn-sm">Refresh</button>
+              <button id="backToHomeBtn" class="btn btn-secondary btn-sm">Home</button>
+              <button id="chatLogoutBtn" class="btn btn-secondary btn-sm">Logout</button>
             </div>
           </div>
-
-          <div class="topbar-right">
-            <button id="refreshConversationsBtn" class="btn btn-secondary btn-sm">Refresh</button>
-            <button id="backToHomeBtn" class="btn btn-secondary btn-sm">Home</button>
-            <button id="chatLogoutBtn" class="btn btn-secondary btn-sm">Logout</button>
+          <div class="topbar-title">
+            <h2 id="chatTitle" class="chat-title">New Conversation</h2>
           </div>
         </header>
 
@@ -140,8 +148,8 @@
             <div id="messagesContainer" class="messages-container">
               <div class="empty-chat-state" id="emptyChatState">
                 <div class="empty-chat-icon">✨</div>
-                <h3>Welcome to ChatBot</h3>
-                <p>Create a new conversation or select one from the sidebar.</p>
+                <h3>How can I help you?</h3>
+                <p>Just type a message below to start chatting.</p>
               </div>
             </div>
 
@@ -159,34 +167,6 @@
               </form>
             </div>
           </div>
-
-          <aside class="control-panel">
-            <div class="panel-card">
-              <div class="panel-card-header">
-                <h3>Selected Conversation</h3>
-              </div>
-
-              <div id="selectedConversationDetails" class="conversation-details">
-                <p class="muted">No conversation selected.</p>
-              </div>
-            </div>
-
-            <div class="panel-card">
-              <div class="panel-card-header">
-                <h3>System Status</h3>
-              </div>
-              <div class="status-list">
-                <div class="status-row">
-                  <span>Backend</span>
-                  <span id="backendStatus" class="status-badge status-unknown">Unknown</span>
-                </div>
-                <div class="status-row">
-                  <span>Streaming</span>
-                  <span id="streamingStatus" class="status-badge status-idle">Idle</span>
-                </div>
-              </div>
-            </div>
-          </aside>
         </section>
       </main>
     </div>
@@ -212,7 +192,7 @@
           </div>
 
           <div class="form-group">
-            <label for="modeSelect">Mode</label>
+            <label for="modeSelect">Mode <span class="muted">(optional)</span></label>
             <select id="modeSelect">
               <option value="">No mode</option>
             </select>

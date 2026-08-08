@@ -5,10 +5,6 @@ const elements = {
   messagesContainer: document.getElementById("messagesContainer"),
   emptyChatState: document.getElementById("emptyChatState"),
   chatTitle: document.getElementById("chatTitle"),
-  chatMeta: document.getElementById("chatMeta"),
-  selectedConversationDetails: document.getElementById("selectedConversationDetails"),
-  backendStatus: document.getElementById("backendStatus"),
-  streamingStatus: document.getElementById("streamingStatus"),
   toastContainer: document.getElementById("toastContainer"),
   modeManagementList: document.getElementById("modeManagementList")
 };
@@ -26,22 +22,9 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
-
 function truncate(text, max = 80) {
   if (!text) return "";
   return text.length > max ? `${text.slice(0, max)}…` : text;
-}
-
-function normalizeConversationStatus(conversation) {
-  if (conversation?.status) return conversation.status;
-  if (conversation?.is_active === false) return "cancelled";
-  return "active";
 }
 
 /**
@@ -117,10 +100,8 @@ export function renderConversations(conversations, selectedConversationId, callb
       const title = escapeHtml(conversation.title || "Untitled Conversation");
       const provider = escapeHtml(conversation.provider || "—");
       const model = escapeHtml(conversation.model || "—");
-      const status = normalizeConversationStatus(conversation);
       const activeClass =
         conversationId === selectedConversationId ? "active" : "";
-      const isCancelled = status === "cancelled";
 
       return `
         <div class="conversation-item ${activeClass}" data-conversation-id="${escapeHtml(conversationId)}">
@@ -128,16 +109,7 @@ export function renderConversations(conversations, selectedConversationId, callb
             <div class="conversation-title" data-role="select">${title}</div>
           </div>
 
-          <div class="conversation-meta" data-role="select">
-            ${truncate(model, 60)}
-          </div>
-
-          <div class="conversation-badges" data-role="select">
-            <span class="badge badge-provider">${provider}</span>
-            <span class="badge ${
-              isCancelled ? "badge-status-cancelled" : "badge-status-active"
-            }">${status}</span>
-          </div>
+          <div class="conversation-meta" data-role="select">${provider} • ${model}</div>
 
           <div class="conversation-item-actions">
             <button type="button" class="icon-btn" data-action="rename">Rename</button>
@@ -151,10 +123,8 @@ export function renderConversations(conversations, selectedConversationId, callb
   elements.conversationList.querySelectorAll(".conversation-item").forEach((item) => {
     const conversationId = item.dataset.conversationId;
 
-    item.querySelectorAll('[data-role="select"]').forEach((node) => {
-      node.addEventListener("click", () => {
-        if (conversationId && onSelect) onSelect(conversationId);
-      });
+    item.addEventListener("click", () => {
+      if (conversationId && onSelect) onSelect(conversationId);
     });
 
     const renameBtn = item.querySelector('[data-action="rename"]');
@@ -181,7 +151,7 @@ export function renderModeManagementList(modes, callbacks = {}) {
   if (!elements.modeManagementList) return;
 
   if (!modes || modes.length === 0) {
-    elements.modeManagementList.innerHTML = `<p class="muted">No modes yet.</p>`;
+    elements.modeManagementList.innerHTML = "";
     return;
   }
 
@@ -245,48 +215,11 @@ export function renderMessages(messages = []) {
 
 export function renderSelectedConversation(conversation) {
   if (!conversation) {
-    elements.chatTitle.textContent = "Select or create a conversation";
-    elements.chatMeta.textContent = "No conversation selected";
-    elements.selectedConversationDetails.innerHTML =
-      `<p class="muted">No conversation selected.</p>`;
+    elements.chatTitle.textContent = "New Conversation";
     return;
   }
 
-  const status = normalizeConversationStatus(conversation);
-
   elements.chatTitle.textContent = conversation.title || "Untitled Conversation";
-  elements.chatMeta.textContent = `${conversation.provider || "—"} • ${conversation.model || "—"} • ${status}`;
-
-  elements.selectedConversationDetails.innerHTML = `
-    <div class="detail-row">
-      <div class="detail-label">Conversation ID</div>
-      <div class="detail-value">${escapeHtml(conversation.conversation_id || conversation.session_id || "—")}</div>
-    </div>
-    <div class="detail-row">
-      <div class="detail-label">Title</div>
-      <div class="detail-value">${escapeHtml(conversation.title || "Untitled Conversation")}</div>
-    </div>
-    <div class="detail-row">
-      <div class="detail-label">Provider</div>
-      <div class="detail-value">${escapeHtml(conversation.provider || "—")}</div>
-    </div>
-    <div class="detail-row">
-      <div class="detail-label">Model</div>
-      <div class="detail-value">${escapeHtml(conversation.model || "—")}</div>
-    </div>
-    <div class="detail-row">
-      <div class="detail-label">Mode</div>
-      <div class="detail-value">${escapeHtml(conversation.mode_id || "No mode")}</div>
-    </div>
-    <div class="detail-row">
-      <div class="detail-label">Status</div>
-      <div class="detail-value">${escapeHtml(status)}</div>
-    </div>
-    <div class="detail-row">
-      <div class="detail-label">Created</div>
-      <div class="detail-value">${escapeHtml(formatDate(conversation.created_at || conversation.createdAt))}</div>
-    </div>
-  `;
 }
 
 export function appendMessage(role, content) {
@@ -341,24 +274,4 @@ export function finalizeStreamingAssistantMessage(bubbleEl, content) {
 export function scrollMessagesToBottom() {
   if (!elements.messagesContainer) return;
   elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
-}
-
-export function setBackendStatus(isOnline) {
-  const el = elements.backendStatus;
-  if (!el) return;
-
-  el.textContent = isOnline ? "Online" : "Offline";
-  el.className = `status-badge ${isOnline ? "status-online" : "status-error"}`;
-}
-
-export function setStreamingStatus(isStreaming) {
-  const el = elements.streamingStatus;
-  if (!el) return;
-
-  el.textContent = isStreaming ? "Streaming" : "Idle";
-  el.className = `status-badge ${isStreaming ? "status-streaming" : "status-idle"}`;
-}
-
-export function getSelectedConversationStatus(conversation) {
-  return normalizeConversationStatus(conversation);
 }

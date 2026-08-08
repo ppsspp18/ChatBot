@@ -253,14 +253,21 @@ export async function fetchQuizzes() {
 // ── Health ─────────────────────────────────────────────────────────
 
 export async function checkBackendHealth() {
-  try {
-    const res = await fetch(`${BACKEND_URL}/conversations/`, {
-      method: "GET",
-      headers: buildHeaders()
-    });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    return res.ok;
+  try {
+    const res = await fetch(`${BACKEND_URL}/health`, {
+      method: "GET",
+      headers: buildHeaders(),
+      signal: controller.signal
+    });
+    // Any HTTP response means the server is awake. On Render free tier a
+    // sleeping instance instead yields a network error that rejects the fetch.
+    return true;
   } catch (_) {
     return false;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
