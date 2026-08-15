@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.core.security import get_current_user
 from app.schemas.conversation_schema import (
@@ -8,6 +8,7 @@ from app.schemas.conversation_schema import (
     UpdateConversationRequest,
 )
 from app.services import conversation_service
+from app.core.limiter import limiter
 
 router = APIRouter(
     prefix="/conversations",
@@ -16,7 +17,9 @@ router = APIRouter(
 
 
 @router.post("/")
+@limiter.limit("5/minute")
 async def create_conversation_route(
+    request: Request,
     data: CreateConversationRequest,
     current_user: Any = Depends(get_current_user),
 ):

@@ -1,5 +1,5 @@
 import { isAuthenticated, getUser, logout } from "../js/auth.js";
-import { createQuiz, fetchQuizzes } from "../js/api.js";
+import { createQuiz, fetchQuizzes, deleteQuiz } from "../js/api.js";
 
 // Require authentication before showing the quiz page.
 if (!isAuthenticated()) {
@@ -111,11 +111,15 @@ function renderQuizList() {
       const title = quiz.topic || quiz.concept || "Quiz";
       const concept = quiz.concept || "—";
       const count = Array.isArray(quiz.questions) ? quiz.questions.length : 0;
+      const quizId = quiz.quiz_id || quiz._id;
 
       return `
-        <button type="button" class="q-card" data-quiz-index="${quizzes.indexOf(quiz)}">
-          <div class="q-card-top">
+        <div class="q-card" data-quiz-index="${quizzes.indexOf(quiz)}">
+          <div class="q-card-header">
             <span class="q-card-title">${escapeHtml(title)}</span>
+            <button type="button" class="q-delete-btn" data-quiz-id="${escapeHtml(quizId)}" title="Delete Quiz">&times;</button>
+          </div>
+          <div class="q-card-badge-row">
             <span class="q-badge q-badge-${escapeHtml((quiz.difficulty || "medium").toLowerCase())}">${escapeHtml(quiz.difficulty || "Medium")}</span>
           </div>
           <div class="q-card-sub">Concept · <b>${escapeHtml(concept)}</b></div>
@@ -123,15 +127,37 @@ function renderQuizList() {
             <span>${count} question${count === 1 ? "" : "s"}</span>
             <span class="q-muted">${escapeHtml(formatDate(quiz.created_at))}</span>
           </div>
-        </button>
+        </div>
       `;
     })
     .join("");
 
   quizList.querySelectorAll(".q-card").forEach((card) => {
-    card.addEventListener("click", () => {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest(".q-delete-btn")) return;
       const quiz = quizzes[Number(card.dataset.quizIndex)];
       if (quiz) openQuiz(quiz);
+    });
+  });
+
+  quizList.querySelectorAll(".q-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const quizId = btn.dataset.quizId;
+      if (!confirm("Are you sure you want to delete this quiz?")) return;
+
+      try {
+        await deleteQuiz(quizId);
+        quizzes = quizzes.filter((q) => (q.quiz_id || q._id) !== quizId);
+        renderQuizList();
+      } catch (error) {
+        console.error("Delete error:", error);
+        if (/unauthorized|401/i.test(error.message)) {
+          handleUnauthorized(error.message);
+        } else {
+          alert(`Failed to delete quiz: ${error.message}`);
+        }
+      }
     });
   });
 }

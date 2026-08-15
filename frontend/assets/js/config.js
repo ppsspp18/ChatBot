@@ -1,4 +1,4 @@
-const PROD_BACKEND_URL = "https://chatbot-j3lf.onrender.com";
+const PROD_BACKEND_URL = "https://chat-j3lf.onrender.com";
 
 function resolveBackendUrl() {
   const hostname = window.location.hostname;
@@ -24,9 +24,9 @@ export const PROVIDERS_MODELS = {
     "gemini-3.5-flash-lite"
   ],
   groq: [
-    "llama-3.3-70b-versatile",
     "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b"
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-safeguard-20b"
   ]
 };
 

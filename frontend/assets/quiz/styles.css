@@ -161,6 +161,7 @@ button {
   padding: 16px;
   color: var(--text);
   transition: var(--transition);
+  cursor: pointer;
 }
 
 .q-card:hover {
@@ -168,7 +169,7 @@ button {
   transform: translateY(-1px);
 }
 
-.q-card-top {
+.q-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -181,6 +182,28 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.q-card-badge-row {
+  display: flex;
+  margin-top: 2px;
+}
+
+.q-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.q-delete-btn:hover {
+  color: var(--danger);
+  transform: scale(1.15);
 }
 
 .q-card-sub {

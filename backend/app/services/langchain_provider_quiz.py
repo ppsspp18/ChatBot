@@ -14,19 +14,14 @@ PROVIDER_MODELS = {
     "google": [
         "gemma-4-26b-a4b-it",
         "gemma-4-31b-it",
+        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite"
     ],
     "groq": [
-        "groq/compound",
-        "groq/compound-mini",
-        "llama-3.3-70b-versatile",
         "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
-        "qwen/qwen3-32b",
-        "qwen/qwen3.6-27b",
-    ],
-    "openrouter": [
-        "openrouter/free",
-    ],
+        "openai/gpt-oss-safeguard-20b"
+    ]
 }
 
 

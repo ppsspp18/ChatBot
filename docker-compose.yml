@@ -10,6 +10,9 @@ services:
       - ./backend:/app
     environment:
       - WATCHFILES_FORCE_POLLING=true
+    dns:               # <--- Add this block to fix DNS resolution inside Docker
+      - 8.8.8.8
+      - 8.8.4.4
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:

@@ -107,3 +107,20 @@ async def get_all_quizzes(user_id: str) -> List[Any]:
         quiz["_id"] = str(quiz["_id"])
 
     return quizzes
+
+
+async def delete_quiz(quiz_id: str, user_id: str) -> Any:
+    result = await quiz_collection.delete_one(
+        {"quiz_id": quiz_id, "user_id": user_id}
+    )
+
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=404,
+            detail="Quiz not found or you do not have permission to delete it.",
+        )
+
+    return {
+        "message": "Quiz deleted successfully",
+        "quiz_id": quiz_id,
+    }

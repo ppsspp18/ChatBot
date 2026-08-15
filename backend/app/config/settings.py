@@ -16,6 +16,9 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 MONGO_URI = os.getenv("MONGO_URI")
 DATABASE_NAME = os.getenv("DATABASE_NAME")
 
+# Redis 
+REDIS_URL = os.getenv("REDIS_URL")
+
 # JWT Authentication
 SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")

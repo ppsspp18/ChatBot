@@ -250,6 +250,14 @@ export async function fetchQuizzes() {
   return handleJsonResponse(res);
 }
 
+export async function deleteQuiz(quizId) {
+  const res = await fetch(`${BACKEND_URL}/quiz/${quizId}`, {
+    method: "DELETE",
+    headers: buildHeaders()
+  });
+  return handleJsonResponse(res);
+}
+
 // ── Health ─────────────────────────────────────────────────────────
 
 export async function checkBackendHealth() {

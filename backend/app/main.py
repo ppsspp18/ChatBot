@@ -7,12 +7,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import CORS_ORIGINS
 from app.database.indexes import create_indexes
+from app.core.limiter import limiter
 
 from app.routes.auth_routes import router as auth_router
 from app.routes.conversation_routes import router as conversations_router
 from app.routes.message_routes import router as messages_router
 from app.routes.mode_routes import router as modes_router
 from app.routes.quiz_route import router as quiz_router
+
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+from app.config.settings import REDIS_URL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,6 +50,10 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
