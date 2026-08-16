@@ -40,32 +40,6 @@ async def create_indexes() -> None:
             name="conversation_id_unique"
         ),
         IndexModel(
-            [("user_id", ASCENDING)],
-            name="user_id"
-        ),
-        IndexModel(
-            [("provider", ASCENDING)],
-            name="provider"
-        ),
-        IndexModel(
-            [("model", ASCENDING)],
-            name="model"
-        ),
-        IndexModel(
-            [("mode_id", ASCENDING)],
-            name="mode_id"
-        ),
-        IndexModel(
-            [("created_at", DESCENDING)],
-            name="created_at_desc"
-        ),
-        IndexModel(
-            [("updated_at", DESCENDING)],
-            name="updated_at_desc"
-        ),
-
-        # Common query: all conversations belonging to one user
-        IndexModel(
             [("user_id", ASCENDING), ("updated_at", DESCENDING)],
             name="user_id_updated_at"
         ),
@@ -73,12 +47,6 @@ async def create_indexes() -> None:
 
     # ── messages ──────────────────────────────────────────────────
     await message_collection.create_indexes([
-        IndexModel(
-            [("conversation_id", ASCENDING)],
-            name="conversation_id"
-        ),
-
-        # Retrieve conversation history in order
         IndexModel(
             [("conversation_id", ASCENDING), ("sequence", ASCENDING)],
             unique=True,
@@ -93,10 +61,8 @@ async def create_indexes() -> None:
             unique=True,
             name="mode_id_unique"
         ),
-        IndexModel(
-            [("user_id", ASCENDING)],
-            name="user_id"
-        ),
+    
+
         IndexModel(
             [("user_id", ASCENDING), ("mode_id", ASCENDING)],
             unique=True,
@@ -111,10 +77,7 @@ async def create_indexes() -> None:
             unique=True,
             name="quiz_id_unique"
         ),
-        IndexModel(
-            [("user_id", ASCENDING)],
-            name="user_id"
-        ),
+
         IndexModel(
             [("user_id", ASCENDING), ("created_at", DESCENDING)],
             name="user_created_at"

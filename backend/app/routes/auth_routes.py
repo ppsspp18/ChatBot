@@ -1,8 +1,9 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.core.security import get_current_user
+from app.core.limiter import limiter
 from app.schemas.user_schema import (
     RegisterRequest,
     LoginRequest,
@@ -23,7 +24,8 @@ async def register_route(data: RegisterRequest) -> UserResponse:
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login_route(data: LoginRequest) -> TokenResponse:
+@limiter.limit("5/minute")
+async def login_route(request: Request, data: LoginRequest) -> TokenResponse:
     return await authenticate(data)
 
 
